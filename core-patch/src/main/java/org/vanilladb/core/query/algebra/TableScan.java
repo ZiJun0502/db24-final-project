@@ -29,7 +29,7 @@ import org.vanilladb.core.storage.tx.Transaction;
  */
 public class TableScan implements UpdateScan {
 	private RecordFile rf;
-	private Schema schema;
+	public Schema schema;
 
 	/**
 	 * Creates a new table scan, and opens its corresponding record file.

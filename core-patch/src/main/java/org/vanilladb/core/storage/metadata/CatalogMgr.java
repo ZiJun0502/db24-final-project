@@ -66,6 +66,7 @@ public class CatalogMgr {
 
 	public void createIndex(String idxName, String tblName, List<String> fldNames,
 			IndexType indexType, Transaction tx) {
+		System.out.println("Catalog createIndex");
 		idxMgr.createIndex(idxName, tblName, fldNames, indexType, tx);
 	}
 
@@ -74,6 +75,7 @@ public class CatalogMgr {
 	}
 	
 	public Set<String> getIndexedFields(String tblName, Transaction tx) {
+		System.out.println("Getting idxMgr Indexed Field for Table " + tblName);
 		return idxMgr.getIndexedFields(tblName, tx);
 	}
 

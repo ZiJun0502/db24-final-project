@@ -64,7 +64,10 @@ public class Planner {
 		if (tx.isReadOnly())
 			throw new UnsupportedOperationException();
 		Parser parser = new Parser(cmd);
+		// System.out.println("Before Parser updateCommand");
+		// System.out.println("SQL: " + cmd);
 		Object obj = parser.updateCommand();
+		// System.out.println("CLASS" + obj.getClass());
 		if (obj.getClass().equals(InsertData.class)) {
 			Verifier.verifyInsertData((InsertData) obj, tx);
 			return uPlanner.executeInsert((InsertData) obj, tx);
@@ -82,6 +85,7 @@ public class Planner {
 			return uPlanner.executeCreateView((CreateViewData) obj, tx);
 		} else if (obj.getClass().equals(CreateIndexData.class)) {
 			Verifier.verifyCreateIndexData((CreateIndexData) obj, tx);
+			System.out.println("Planner executeCreateIndex");
 			return uPlanner.executeCreateIndex((CreateIndexData) obj, tx);
 		} else if (obj.getClass().equals(DropTableData.class)) {
 			Verifier.verifyDropTableData((DropTableData) obj, tx);

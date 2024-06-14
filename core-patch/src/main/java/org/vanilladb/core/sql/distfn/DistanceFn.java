@@ -14,6 +14,9 @@ public abstract class DistanceFn {
     public void setQueryVector(VectorConstant query) {
         this.query = query;
     }
+    public VectorConstant getQueryVector() {
+        return this.query;
+    }
     
     public double distance(VectorConstant vec) {
         // check vector dimension

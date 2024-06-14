@@ -97,7 +97,7 @@ public class IndexUpdatePlanner implements UpdatePlanner {
 		
 		// Create a IndexSelectPlan if there is matching index in the predicate
 		boolean usingIndex = false;
-		selectPlan = IndexSelector.selectByBestMatchedIndex(tblName, tp, data.pred(), tx);
+		selectPlan = IndexSelector.selectByBestMatchedIndex(tblName, tp, data.pred(), tx, null);
 		if (selectPlan == null)
 			selectPlan = new SelectPlan(tp, data.pred());
 		else {
@@ -166,7 +166,7 @@ public class IndexUpdatePlanner implements UpdatePlanner {
 		Plan selectPlan = null;
 		
 		// Create a IndexSelectPlan if there is matching index in the predicate
-		selectPlan = IndexSelector.selectByBestMatchedIndex(tblName, tp, data.pred(), tx, data.targetFields());
+		selectPlan = IndexSelector.selectByBestMatchedIndex(tblName, tp, data.pred(), tx, data.targetFields(), null);
 		if (selectPlan == null)
 			selectPlan = new SelectPlan(tp, data.pred());
 		else

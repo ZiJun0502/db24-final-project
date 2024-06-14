@@ -286,12 +286,12 @@ public class Parser {
 			sortFields = sortList.fieldList();
 			sortDirs = sortList.directionList();
 		}
-
 		int limit = -1;
 		if (lex.matchKeyword("limit")) {
 			lex.eatKeyword("limit");
 			limit = (int) lex.eatNumericConstant();
 		}
+		// System.out.println("Parser: limit " + limit);
 		
 		return new QueryData(isExplain, projs.asStringSet(), tables, pred,
 				groupFields, projs.aggregationFns(), sortFields, sortDirs, embFields, limit);
@@ -633,6 +633,7 @@ public class Parser {
 	}
 
 	private CreateIndexData createIndex() {
+		System.out.println("Parser createIndex");
 		lex.eatKeyword("index");
 		String idxName = lex.eatId();
 		lex.eatKeyword("on");
@@ -655,6 +656,9 @@ public class Parser {
 			} else if (lex.matchKeyword("lsh")) {
 				lex.eatKeyword("lsh");
 				idxType = IndexType.LSH;
+			} else if (lex.matchKeyword("ivf")) {
+				lex.eatKeyword("ivf");
+				idxType = IndexType.IVF;
 			} else
 				throw new UnsupportedOperationException();
 		}

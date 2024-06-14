@@ -26,6 +26,7 @@ import org.vanilladb.core.query.algebra.TablePlan;
 import org.vanilladb.core.query.algebra.index.IndexSelectPlan;
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.ConstantRange;
+import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.predicate.Predicate;
 import org.vanilladb.core.storage.index.IndexType;
 import org.vanilladb.core.storage.metadata.index.IndexInfo;
@@ -34,31 +35,38 @@ import org.vanilladb.core.storage.tx.Transaction;
 public class IndexSelector {
 
 	public static IndexSelectPlan selectByBestMatchedIndex(String tblName,
-			TablePlan tablePlan, Predicate pred, Transaction tx) {
+			TablePlan tablePlan, Predicate pred, Transaction tx, 
+			DistanceFn embField) {
 		
 		Set<IndexInfo> candidates = new HashSet<IndexInfo>();
+		System.out.println("IndexSelector selectByBest");
 		for (String fieldName : VanillaDb.catalogMgr().getIndexedFields(tblName, tx)) {
 			ConstantRange searchRange = pred.constantRange(fieldName);
-			if (searchRange == null)
+			System.out.println("IndexSelector:" + fieldName);
+			System.out.println("IndexSelector, embField: " + (embField == null));
+			if (searchRange == null && embField == null)
 				continue;
 			
 			List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblName, fieldName, tx);
 			candidates.addAll(iis);
 		}
 		
-		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx);
+		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx, embField);
 	}
 	
 	public static IndexSelectPlan selectByBestMatchedIndex(String tblName,
-			TablePlan tablePlan, Predicate pred, Transaction tx, Collection<String> excludedFields) {
+			TablePlan tablePlan, Predicate pred, Transaction tx, Collection<String> excludedFields, 
+			DistanceFn embField) {
 		
 		Set<IndexInfo> candidates = new HashSet<IndexInfo>();
 		for (String fieldName : VanillaDb.catalogMgr().getIndexedFields(tblName, tx)) {
+			System.out.println("selectByBest fields:" + fieldName);
+			System.out.println("selectByBest emb:" + embField.fieldName());
 			if (excludedFields.contains(fieldName))
 				continue;
 			
 			ConstantRange searchRange = pred.constantRange(fieldName);
-			if (searchRange == null)
+			if (searchRange == null && embField == null)
 				continue;
 			
 			List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblName, fieldName, tx);
@@ -75,12 +83,15 @@ public class IndexSelector {
 			}
 		}
 		
-		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx);
+		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx, embField);
 	}
 	
 	public static IndexSelectPlan selectByBestMatchedIndex(Set<IndexInfo> candidates,
-			TablePlan tablePlan, Predicate pred, Transaction tx) {
+			TablePlan tablePlan, Predicate pred, Transaction tx, 
+			DistanceFn embField) {
 		// Choose the index with the most matched fields in the predicate
+		System.out.println("IndexSelector candidate selectByBest");
+		System.out.println("Candidates Size: " + candidates.size());
 		int matchedCount = 0;
 		IndexInfo bestIndex = null;
 		Map<String, ConstantRange> searchRanges = null;
@@ -91,11 +102,16 @@ public class IndexSelector {
 			
 			Map<String, ConstantRange> ranges = new HashMap<String, ConstantRange>();
 			for (String fieldName : ii.fieldNames()) {
+				System.out.println("FIELDNAME: " + fieldName);
 				ConstantRange searchRange = pred.constantRange(fieldName);
 				if (searchRange != null && (
 						(ii.indexType() == IndexType.HASH && searchRange.isConstant())
 						|| ii.indexType() == IndexType.BTREE))
 					ranges.put(fieldName, searchRange);
+				else if (ii.indexType() == IndexType.IVF) {
+					searchRange = ConstantRange.newInstance(embField.getQueryVector());
+					ranges.put("i_emb", searchRange);
+				}
 			}
 			
 			if (ranges.size() > matchedCount) {
@@ -104,6 +120,7 @@ public class IndexSelector {
 				searchRanges = ranges;
 			}
 		}
+		System.out.println("IndexSelector, BestIndex: " + bestIndex.fieldNames());
 		
 		if (bestIndex != null) {
 			return new IndexSelectPlan(tablePlan, bestIndex, searchRanges, tx);

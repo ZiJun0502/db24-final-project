@@ -64,6 +64,10 @@ public abstract class ConstantRange {
 					: null;
 			return new VarcharConstantRange(lowVarchar, lowIncl,
 					(VarcharConstant) highVarchar, highIncl);
+		} else if (type instanceof VectorType) {
+			VectorConstant lowVector = low != null ? (VectorConstant) low : null;
+			VectorConstant highVector = high != null ? (VectorConstant) high : null;
+			return new VectorConstantRange(lowVector, lowIncl, highVector, highIncl);
 		}
 
 		throw new UnsupportedOperationException();

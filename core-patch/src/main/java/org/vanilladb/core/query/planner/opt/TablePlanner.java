@@ -114,6 +114,7 @@ class TablePlanner {
 	 * @return a select plan for the table.
 	 */
 	public Plan makeSelectPlan() {
+		System.out.println("MakeSelectPlan");
 		Plan p = makeIndexSelectPlan();
 		if (p == null)
 			p = tp;
@@ -175,7 +176,8 @@ class TablePlanner {
 	 * that help the identification: e.g., "F < C", not "F - C < 0".
 	 */
 	private Plan makeIndexSelectPlan() {
-		return IndexSelector.selectByBestMatchedIndex(tblName, tp, pred, tx);
+		System.out.println("MakeIndexSelectPlan, vec: " + this.embField.getQueryVector());
+		return IndexSelector.selectByBestMatchedIndex(tblName, tp, pred, tx, this.embField);
 	}
 
 	/**

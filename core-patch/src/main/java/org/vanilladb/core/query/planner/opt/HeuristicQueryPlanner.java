@@ -44,6 +44,7 @@ public class HeuristicQueryPlanner implements QueryPlanner {
 	 */
 	@Override
 	public Plan createPlan(QueryData data, Transaction tx) {
+		System.out.println("Heuristic Create Plan");
 		// Step 1: Create a TablePlanner object for each mentioned table/view
 		int id = 0;
 		for (String tbl : data.tables()) {
@@ -91,6 +92,7 @@ public class HeuristicQueryPlanner implements QueryPlanner {
 	}
 
 	private Plan getLowestSelectPlan() {
+		System.out.println("Heuristic GetLowSelect");
 		TablePlanner bestTp = null;
 		Plan bestPlan = null;
 		Plan bestView = null;
