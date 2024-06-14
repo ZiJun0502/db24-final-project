@@ -5,19 +5,24 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.ArrayList;
 
 import org.vanilladb.bench.benchmarks.sift.SiftBenchConstants;
 import org.vanilladb.bench.server.param.sift.SiftTestbedLoaderParamHelper;
 import org.vanilladb.bench.server.procedure.StoredProcedureUtils;
 import org.vanilladb.core.server.VanillaDb;
+import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
 import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.storage.tx.recovery.CheckpointTask;
 import org.vanilladb.core.storage.tx.recovery.RecoveryMgr;
 
+// import kmeans class
+import org.vanilladb.bench.server.procedure.kmeans;
+
 public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderParamHelper> {
     private static Logger logger = Logger.getLogger(SiftTestbedLoaderProc.class.getName());
-    
+
     public SiftTestbedLoaderProc() {
         super(new SiftTestbedLoaderParamHelper());
     }
@@ -39,8 +44,8 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         if (logger.isLoggable(Level.INFO))
             logger.info("Training IVF index...");
 
-        StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(), getHelper().getIdxFields(), 
-            getHelper().getIdxName(), getTransaction());
+        StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(), getHelper().getIdxFields(),
+                getHelper().getIdxName(), getTransaction());
 
         if (logger.isLoggable(Level.INFO))
             logger.info("Loading completed. Flush all loading data to disks...");
@@ -81,7 +86,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
             System.out.println(sql);
             StoredProcedureUtils.executeUpdate(sql, tx);
         }
-        
+
         if (logger.isLoggable(Level.FINE))
             logger.info("Finish creating schemas.");
     }
@@ -92,11 +97,22 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
 
         Transaction tx = getTransaction();
 
+        int dim = SiftBenchConstants.NUM_DIMENSION;
+        int num_items = SiftBenchConstants.NUM_ITEMS;
+
+        int[][] kmeans_input = new int[num_items][dim + 1];
+
         try (BufferedReader br = new BufferedReader(new FileReader(SiftBenchConstants.DATASET_FILE))) {
             int iid = startIId;
             String vectorString;
 
             while (iid < SiftBenchConstants.NUM_ITEMS && (vectorString = br.readLine()) != null) {
+
+                String[] temp_vec = vectorString.split(",");
+                for (int i = 0; i < dim; i++) {
+                    kmeans_input[iid - 1][i] = Integer.parseInt(temp_vec[i]);
+                }
+
                 String sql = "INSERT INTO sift(i_id, i_emb) VALUES (" + iid + ", [" + vectorString + "])";
                 // logger.info(sql);
                 iid++;
@@ -105,6 +121,15 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        // Create kmeans object
+
+        kmeans Kmeans = new kmeans(kmeans_input, num_items, dim, 400);
+        Kmeans.run();
+
+        int[][] kmeans_output = Kmeans.getOutput();
+        int[][] kmeans_centroids = Kmeans.getCentroids();
+
         if (logger.isLoggable(Level.FINE))
             logger.info("Finish populating items.");
     }
