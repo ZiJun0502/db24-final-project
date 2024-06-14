@@ -12,6 +12,9 @@ public class SiftTestbedLoaderParamHelper implements StoredProcedureHelper {
     private static final String TABLES_DDL[] = new String[1];
     private static final String INDEXES_DDL[] = new String[1];
     private static final int N_DIM = 128;
+    private static final int N_CLUSTERS = 400;
+    private static final String Cluster_table[] = new String[N_CLUSTERS];
+    private static final String Cluster_center[] = new String[1];
 
     private int numItems;
 
@@ -37,6 +40,15 @@ public class SiftTestbedLoaderParamHelper implements StoredProcedureHelper {
         return INDEXES_DDL;
     }
 
+    // shuchen
+    public String[] getClusterSchemas() {
+        return Cluster_table;
+    }
+
+    public String[] getClusterCenterSchemas() {
+        return Cluster_center;
+    }
+
     public int getNumberOfItems() {
         return numItems;
     }
@@ -45,8 +57,12 @@ public class SiftTestbedLoaderParamHelper implements StoredProcedureHelper {
     public void prepareParameters(Object... pars) {
         numItems = (Integer) pars[0];
         TABLES_DDL[0] = "CREATE TABLE " + getTableName() + " (i_id INT, i_emb VECTOR(" + N_DIM + "))";
-        INDEXES_DDL[0] = "CREATE INDEX " + getIdxName() + " ON sift (" + getIdxFields().get(0) + ") USING IVF";
-
+        // INDEXES_DDL[0] = "CREATE INDEX " + getIdxName() + " ON sift (" +
+        // getIdxFields().get(0) + ") USING IVF";
+        Cluster_center[0] = "CREATE TABLE cluster_center (c_id INT, i_emb VECTOR(" + N_DIM + "))";
+        for (int i = 0; i < N_CLUSTERS; i++) {
+            Cluster_table[i] = "CREATE TABLE cluster_" + String.valueOf(i) + " (i_id INT, i_emb VECTOR(" + N_DIM + "))";
+        }
     }
 
     @Override

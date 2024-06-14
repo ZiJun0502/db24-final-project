@@ -37,18 +37,18 @@ public class kmeans {
     private int num_items;
     private int dim;
     private int k;
-    private int[][] k_centroids;
+    private float[][] k_centroids;
     // dynamic 2d array
     private List<List<Record>> clusters;
     private Record[] records;
     private Random random = new Random();
     private ArrayList<Double[]> centroids;
 
-    public kmeans(int[][] input, int num_items, int dim, int k) {
+    public kmeans(float[][] input, int num_items, int dim, int k) {
         this.num_items = num_items;
         this.dim = dim;
         this.k = k;
-        this.k_centroids = new int[k][dim];
+        this.k_centroids = new float[k][dim];
         this.records = new Record[num_items];
         this.clusters = new ArrayList<List<Record>>(k);
         for (int i = 0; i < num_items; i++) {
@@ -171,7 +171,7 @@ public class kmeans {
         // store centroids to k_centroids
         for (int i = 0; i < k; i++) {
             for (int j = 0; j < dim; j++) {
-                k_centroids[i][j] = centroids.get(i)[j].intValue();
+                k_centroids[i][j] = centroids.get(i)[j].floatValue();
             }
         }
 
@@ -179,19 +179,19 @@ public class kmeans {
 
     // return records with cluster id
 
-    public int[][] getOutput() {
+    public float[][] getOutput() {
 
-        int[][] output = new int[num_items][dim + 1];
+        float[][] output = new float[num_items][dim + 1];
         for (int i = 0; i < num_items; i++) {
             for (int j = 0; j < dim; j++) {
-                output[i][j] = records[i].getRecord()[j].intValue();
+                output[i][j] = records[i].getRecord()[j].floatValue();
             }
             output[i][dim] = records[i].getCluster();
         }
         return output;
     }
 
-    public int[][] getCentroids() {
+    public float[][] getCentroids() {
         return k_centroids;
     }
 

@@ -82,8 +82,18 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
             logger.info("Creating indexes...");
 
         // Create indexes
-        for (String sql : paramHelper.getIndexSchemas()) {
-            System.out.println(sql);
+        // for (String sql : paramHelper.getIndexSchemas()) {
+        // System.out.println(sql);
+        // StoredProcedureUtils.executeUpdate(sql, tx);
+        // }
+
+        // shuchen
+        // Create cluster tables
+        for (String sql : paramHelper.getClusterSchemas()) {
+            StoredProcedureUtils.executeUpdate(sql, tx);
+        }
+        // Create cluster center table
+        for (String sql : paramHelper.getClusterCenterSchemas()) {
             StoredProcedureUtils.executeUpdate(sql, tx);
         }
 
@@ -100,7 +110,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         int dim = SiftBenchConstants.NUM_DIMENSION;
         int num_items = SiftBenchConstants.NUM_ITEMS;
 
-        int[][] kmeans_input = new int[num_items][dim + 1];
+        float[][] kmeans_input = new float[num_items][dim];
 
         try (BufferedReader br = new BufferedReader(new FileReader(SiftBenchConstants.DATASET_FILE))) {
             int iid = startIId;
@@ -110,7 +120,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
 
                 String[] temp_vec = vectorString.split(",");
                 for (int i = 0; i < dim; i++) {
-                    kmeans_input[iid - 1][i] = Integer.parseInt(temp_vec[i]);
+                    kmeans_input[iid][i] = Integer.parseInt(temp_vec[i]);
                 }
 
                 String sql = "INSERT INTO sift(i_id, i_emb) VALUES (" + iid + ", [" + vectorString + "])";
@@ -124,11 +134,37 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
 
         // Create kmeans object
 
-        kmeans Kmeans = new kmeans(kmeans_input, num_items, dim, 400);
+        int k = 400;
+
+        kmeans Kmeans = new kmeans(kmeans_input, num_items, dim, k);
         Kmeans.run();
 
-        int[][] kmeans_output = Kmeans.getOutput();
-        int[][] kmeans_centroids = Kmeans.getCentroids();
+        float[][] kmeans_output = Kmeans.getOutput();
+
+        for (int i = 0; i < num_items; i++) {
+            int cluster_id = (int) kmeans_output[i][dim];
+            float[] rawVector = new float[dim];
+            for (int j = 0; j < dim; j++) {
+                rawVector[j] = kmeans_output[i][j];
+            }
+            VectorConstant vector = new VectorConstant(rawVector);
+            String sql = "INSERT INTO cluster_" + cluster_id + "(i_id, i_emb) VALUES (" + i + ", " + vector.toString()
+                    + ")";
+            StoredProcedureUtils.executeUpdate(sql, tx);
+        }
+
+        float[][] kmeans_centroids = Kmeans.getCentroids();
+
+        for (int i = 0; i < k; i++) {
+            float[] rawVector = new float[dim];
+            for (int j = 0; j < dim; j++) {
+                rawVector[j] = kmeans_centroids[i][j];
+            }
+            VectorConstant vector = new VectorConstant(rawVector);
+            String sql = "INSERT INTO cluster_center(c_id, i_emb) VALUES (" + i + ", " + vector.toString() + ")";
+            System.out.println(sql);
+            StoredProcedureUtils.executeUpdate(sql, tx);
+        }
 
         if (logger.isLoggable(Level.FINE))
             logger.info("Finish populating items.");
