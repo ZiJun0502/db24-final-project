@@ -113,11 +113,13 @@ public class SiftBenchProc extends StoredProcedure<SiftBenchParamHelper> {
             }
             if (nearest_id != -1) {
                 nearestNeighbors.add(nearest_id);
-                System.out.println("nearest_id: " + nearest_id);
+                // System.out.println("nearest_id: " + nearest_id);
                 count++;
             }
             near_cluster.close();
         }
+
+        // System.out.println("Done with nearest neighbor query");
 
         if (count == 0)
             throw new RuntimeException("Nearest neighbor query execution failed for " + query.toString());

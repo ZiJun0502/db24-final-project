@@ -44,8 +44,9 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         if (logger.isLoggable(Level.INFO))
             logger.info("Training IVF index...");
 
-        StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(), getHelper().getIdxFields(),
-                getHelper().getIdxName(), getTransaction());
+        // StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(),
+        // getHelper().getIdxFields(),
+        // getHelper().getIdxName(), getTransaction());
 
         if (logger.isLoggable(Level.INFO))
             logger.info("Loading completed. Flush all loading data to disks...");
@@ -60,7 +61,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         VanillaDb.logMgr().removeAndCreateNewLog();
 
         if (logger.isLoggable(Level.INFO))
-            logger.info("Loading procedure finished.");
+            logger.info("Loading procedure finished.!!!");
     }
 
     private void dropOldData() {
@@ -118,9 +119,9 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
 
             while (iid < SiftBenchConstants.NUM_ITEMS && (vectorString = br.readLine()) != null) {
 
-                String[] temp_vec = vectorString.split(",");
+                String[] temp_vec = vectorString.split(" ");
                 for (int i = 0; i < dim; i++) {
-                    kmeans_input[iid][i] = Integer.parseInt(temp_vec[i]);
+                    kmeans_input[iid][i] = Float.parseFloat(temp_vec[i]);
                 }
 
                 String sql = "INSERT INTO sift(i_id, i_emb) VALUES (" + iid + ", [" + vectorString + "])";
@@ -136,20 +137,42 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
 
         int k = 400;
 
+        System.out.println("Start kmeans clustering...");
+
         kmeans Kmeans = new kmeans(kmeans_input, num_items, dim, k);
         Kmeans.run();
 
         float[][] kmeans_output = Kmeans.getOutput();
+        int[] cluster_id = Kmeans.getCluster();
+
+        int[] cluster_size = new int[k];
+        for (int i = 0; i < num_items; i++) {
+            cluster_size[cluster_id[i]]++;
+        }
+
+        for (int i = 0; i < k; i++) {
+            if (cluster_size[i] == 0) {
+                System.out.println("cluster " + i + " size is 0");
+            }
+        }
 
         for (int i = 0; i < num_items; i++) {
-            int cluster_id = (int) kmeans_output[i][dim];
+            int cur_cluster = cluster_id[i];
             float[] rawVector = new float[dim];
             for (int j = 0; j < dim; j++) {
                 rawVector[j] = kmeans_output[i][j];
             }
             VectorConstant vector = new VectorConstant(rawVector);
-            String sql = "INSERT INTO cluster_" + cluster_id + "(i_id, i_emb) VALUES (" + i + ", " + vector.toString()
+            String s_vec = vector.toString();
+            // for (int j = 0; j < dim; j++) {
+            // System.out.print(vector.asJavaVal()[j] + " ");
+            // }
+            // System.out.println();
+            String sql = "INSERT INTO cluster_" + cur_cluster + "(i_id, i_emb) VALUES ("
+                    + i + ", "
+                    + s_vec
                     + ")";
+            // System.out.println(sql);
             StoredProcedureUtils.executeUpdate(sql, tx);
         }
 
@@ -162,7 +185,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
             }
             VectorConstant vector = new VectorConstant(rawVector);
             String sql = "INSERT INTO cluster_center(c_id, i_emb) VALUES (" + i + ", " + vector.toString() + ")";
-            System.out.println(sql);
+            // System.out.println(sql);
             StoredProcedureUtils.executeUpdate(sql, tx);
         }
 
