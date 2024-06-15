@@ -6,19 +6,16 @@ import static org.vanilladb.core.sql.Type.INTEGER;
 import static org.vanilladb.core.sql.Type.VECTOR;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.Vector;
-import java.util.Arrays;
 
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.BigIntConstant;
 import org.vanilladb.core.sql.IntegerConstant;
 import org.vanilladb.core.sql.Constant;
-import org.vanilladb.core.sql.DoubleConstant;
 import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.Schema;
-import org.vanilladb.core.storage.buffer.Buffer;
 import org.vanilladb.core.storage.file.BlockId;
 import org.vanilladb.core.storage.index.Index;
 import org.vanilladb.core.storage.index.SearchKey;
@@ -28,12 +25,11 @@ import org.vanilladb.core.storage.metadata.TableInfo;
 import org.vanilladb.core.storage.metadata.index.IndexInfo;
 import org.vanilladb.core.storage.record.RecordFile;
 import org.vanilladb.core.storage.record.RecordId;
-import org.vanilladb.core.storage.record.RecordPage;
 import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.distfn.EuclideanFn;
 import org.vanilladb.core.util.CoreProperties;
-import org.vanilladb.core.storage.index.ivf.KMeans_1;
+import org.vanilladb.core.storage.index.ivf.DataRecord;
 
 public class IVFIndex extends Index {
 
@@ -42,7 +38,7 @@ public class IVFIndex extends Index {
     private static final int NUM_CLUSTERS;
 
     static {
-        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 400);
+        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
     }
 
     // private static String vecFieldName(int index) {
@@ -82,14 +78,12 @@ public class IVFIndex extends Index {
     }
 
     // store key and record id
-    private List<SearchKey> keys = new ArrayList<SearchKey>();
-    private List<RecordId> recordIds = new ArrayList<RecordId>();
     private int clusterID;
     private SearchKey searchKey;
     private RecordFile rf;
     private boolean isBeforeFirsted;
     private String centroidTblname, clusterTblnamePrefix;
-    private boolean isInited = false;
+    private boolean tableSet = false;
 
     DistanceFn distFn_vec;
 
@@ -119,7 +113,42 @@ public class IVFIndex extends Index {
         // Arrays.toString(vec.asJavaVal()));
         return vec;
     }
-
+    public class Pair<K, V> {
+        private K key;
+        public V value;
+        public Pair(K key, V value) {
+            this.key = key;
+            this.value = value;
+        }
+        public K getKey() {return key;}
+    }
+    private List<Integer> searchKClosestCluster(int k, VectorConstant vec) {
+        // System.out.println("searchClosestCluster: " + centroidTblname);
+        List<Integer> kClosestClusters = new ArrayList<>();
+        this.distFn_vec.setQueryVector(vec);
+        PriorityQueue<Pair<Double, Integer>> minHeap = new PriorityQueue<>(k, Comparator.comparingDouble(Pair::getKey));
+        for(int i = 0 ; i < k ; i++) {
+            TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+            // open centroid file
+            this.rf = ti.open(tx, false);
+            rf.beforeFirst();
+            while (rf.next()) {
+                Constant cid = rf.getVal(SCHEMA_CID);
+                Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
+                double distance = distFn_vec.distance((VectorConstant) centroid_vec);
+                if (minHeap.size() < k) {
+                    minHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
+                } else if (distance < minHeap.peek().getKey()) {
+                    minHeap.poll();
+                    minHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
+                }
+            }
+        }
+        while (!minHeap.isEmpty()) {
+            kClosestClusters.add(minHeap.poll().value);
+        }
+        return kClosestClusters;
+    }
     private int searchClosestCluster(VectorConstant vec) {
         // System.out.println("searchClosestCluster: " + centroidTblname);
         double minDistance = Double.MAX_VALUE;
@@ -129,9 +158,7 @@ public class IVFIndex extends Index {
         // open centroid file
         this.rf = ti.open(tx, false);
         rf.beforeFirst();
-        int num_centroids = 0;
         while (rf.next()) {
-            num_centroids++;
             Constant cid = rf.getVal(SCHEMA_CID);
             Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
             double distance = distFn_vec.distance((VectorConstant) centroid_vec);
@@ -140,9 +167,6 @@ public class IVFIndex extends Index {
                 closestClusterIndex = (int) cid.asJavaVal();
             }
         }
-
-        // System.out.println("num_centroids in file" + num_centroids);
-        // System.out.println("closestCluster: " + closestClusterIndex);
         return closestClusterIndex;
     }
 
@@ -188,78 +212,41 @@ public class IVFIndex extends Index {
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
 
-    public void read_key_from_cluster_file() {
-        // read key from cluster_-1.tbl
-        TableInfo ti = new TableInfo(clusterTblnamePrefix + "-1", schema_cluster(keyType));
-        RecordFile rf = ti.open(tx, false);
-        rf.beforeFirst();
-        while (rf.next()) {
-            SearchKey key = new SearchKey(new Constant[] { rf.getVal(SCHEMA_VECTOR) });
-            keys.add(key);
-            recordIds.add(new RecordId(new BlockId(dataFileName, (Long) rf.getVal(SCHEMA_RID_BLOCK).asJavaVal()),
-                    (Integer) rf.getVal(SCHEMA_RID_ID).asJavaVal()));
-        }
-    }
 
-    public void executeTrainIndex(int num_items, int dim) {
-        // read key from cluster_-1.tbl
-        read_key_from_cluster_file();
-        float[][] kmeans_input = new float[num_items][dim];
-        // store key.vals[1] to kmeans_input
-
-        // System.out.println("keys.size(): " + keys.size());
-        // System.out.println("recordIds.size(): " + recordIds.size());
-        for (int i = 0; i < num_items; i++) {
-            VectorConstant vec = (VectorConstant) keys.get(i).get(0);
-            float[] rawVector = new float[dim];
-            for (int j = 0; j < dim; j++) {
-                rawVector[j] = vec.asJavaVal()[j];
-            }
-            kmeans_input[i] = rawVector;
-        }
-        KMeans_1 Kmeans = new KMeans_1(kmeans_input, num_items, dim, NUM_CLUSTERS);
-        Kmeans.run();
-        ArrayList<String>[] kmeans_output = Kmeans.getOutput();
-        float[][] kmeans_centroids = Kmeans.getCentroids();
-
-        // store kmeans_centroids to centroid file
-
+	public void setClusterTable(List<List<DataRecord>> cluster) {
+        // centroid file 
         TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
-        rf = ti.open(tx, true);
-        if (rf.fileSize() == 0)
-            RecordFile.formatFileHeader(ti.fileName(), tx);
-        rf.beforeFirst();
-
+        RecordFile centroidFile = ti.open(tx, true);
+        RecordFile.formatFileHeader(ti.fileName(), tx);
         for (int i = 0; i < NUM_CLUSTERS; i++) {
-            rf.insert();
-            rf.setVal(SCHEMA_CID, new IntegerConstant(i));
-            VectorConstant vector = new VectorConstant(kmeans_centroids[i]);
-            rf.setVal(SCHEMA_VECTOR, vector);
+            VectorConstant vector = (VectorConstant) cluster.get(i).get(0).i_emb;
+            centroidFile.insert();
+            centroidFile.setVal(SCHEMA_CID, new IntegerConstant(i));
+            centroidFile.setVal(SCHEMA_VECTOR, vector);
         }
-
-        // store kmeans_output to cluster files
+        // cluster file 
         for (int i = 0; i < NUM_CLUSTERS; ++i) {
-            // System.out.println("cluster_" + i);
+            System.out.println("Setting table for cluster_" + i + " with size: " + cluster.get(i).size());
             String tblname = clusterTblnamePrefix + i;
             TableInfo cluster_ti = new TableInfo(tblname, schema_cluster(keyType));
             RecordFile cluster_rf = cluster_ti.open(tx, true);
             if (cluster_rf.fileSize() == 0)
                 RecordFile.formatFileHeader(cluster_ti.fileName(), tx);
             cluster_rf.beforeFirst();
-            for (int j = 0; j < kmeans_output[i].size(); j++) {
+            for (int j = 0; j < cluster.get(i).size(); j++) {
+                DataRecord rec = cluster.get(i).get(j);
                 cluster_rf.insert();
-                VectorConstant vector = new VectorConstant(kmeans_output[i].get(j));
+                VectorConstant vector = (VectorConstant) rec.i_emb;
                 cluster_rf.setVal(SCHEMA_VECTOR, vector);
-                cluster_rf.setVal(SCHEMA_RID_BLOCK, new BigIntConstant(recordIds.get(j).block().number()));
-                cluster_rf.setVal(SCHEMA_RID_ID, new IntegerConstant(recordIds.get(j).id()));
+                cluster_rf.setVal(SCHEMA_RID_BLOCK, rec.blockNum);
+                cluster_rf.setVal(SCHEMA_RID_ID, rec.recordId);
             }
-
         }
-
+        tableSet = true;
     }
-
     @Override
     public void insert(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
+        if(!tableSet) return;
         // search the position
         beforeFirst(new SearchRange(key));
 
@@ -282,6 +269,7 @@ public class IVFIndex extends Index {
 
     @Override
     public void delete(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
+        if(!tableSet) return;
         // search the position
         beforeFirst(new SearchRange(key));
 
@@ -317,12 +305,5 @@ public class IVFIndex extends Index {
     private long fileSize(String fileName) {
         tx.concurrencyMgr().readFile(fileName);
         return VanillaDb.fileMgr().size(fileName);
-    }
-
-    private SearchKey getKey() {
-        Constant[] vals = new Constant[keyType.length()];
-        for (int i = 0; i < vals.length; i++)
-            vals[i] = rf.getVal(SCHEMA_VECTOR);
-        return new SearchKey(vals);
     }
 }
