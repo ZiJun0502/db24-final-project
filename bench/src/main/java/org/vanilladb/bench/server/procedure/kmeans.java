@@ -151,7 +151,7 @@ public class kmeans {
 
         Boolean flag = true;
         int it = 0;
-        while (it < 100 && flag) {
+        while (it < 10 && flag) {
             // System.out.println("kmeans iteration " + it);
             it++;
             Double new_err = 0.0;

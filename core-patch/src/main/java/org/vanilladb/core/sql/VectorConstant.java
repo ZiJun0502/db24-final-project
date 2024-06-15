@@ -1,6 +1,7 @@
 package org.vanilladb.core.sql;
 
 import static java.sql.Types.VARCHAR;
+import static java.sql.Types.ARRAY;
 
 import java.io.Serializable;
 
@@ -167,7 +168,10 @@ public class VectorConstant extends Constant implements Serializable {
         switch (type.getSqlType()) {
             case VARCHAR:
                 return new VarcharConstant(toString(), type);
-            }
+            case ARRAY:
+                return new VectorConstant(vec);
+        }
+
         throw new IllegalArgumentException("Cannot cast vector to " + type);
     }
 

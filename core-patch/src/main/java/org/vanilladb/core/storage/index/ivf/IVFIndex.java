@@ -3,6 +3,7 @@ package org.vanilladb.core.storage.index.ivf;
 import static org.vanilladb.core.sql.Type.DOUBLE;
 import static org.vanilladb.core.sql.Type.BIGINT;
 import static org.vanilladb.core.sql.Type.INTEGER;
+import static org.vanilladb.core.sql.Type.VECTOR;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,20 +37,21 @@ import org.vanilladb.core.util.CoreProperties;
 public class IVFIndex extends Index {
 
     private static final String 
-        SCHEMA_VECTOR_PREFIX = "vec", SCHEMA_RID_BLOCK = "block", SCHEMA_RID_ID = "id",
-        SCHEMA_CLUSTER_ID = "cluster_id", SCHEMA_DATA_PAGE = "dt_page";
+        SCHEMA_ID = "i_id", SCHEMA_CID = "c_id", SCHEMA_VECTOR = "i_emb",
+        SCHEMA_RID_BLOCK = "block", SCHEMA_RID_ID = "id";
     private static final int NUM_CLUSTERS;
 
     static {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 100);
     }
-	private static String vecFieldName(int index) {
-		return SCHEMA_VECTOR_PREFIX + index;
-	}
+	// private static String vecFieldName(int index) {
+	// 	return SCHEMA_VECTOR_PREFIX + index;
+	// }
 	public static long searchCost(SearchKeyType keyType, long totRecs, long matchRecs) {
         // copied from HashIndex.java
-		int rpb = Buffer.BUFFER_SIZE / RecordPage.slotSize(schema(keyType));
-		return (totRecs / rpb) / NUM_CLUSTERS;
+		// int rpb = Buffer.BUFFER_SIZE / RecordPage.slotSize(schema(keyType));
+		// return (totRecs / rpb) / NUM_CLUSTERS;
+        return 0;
 	}
 
 	/**
@@ -60,51 +62,46 @@ public class IVFIndex extends Index {
 	 * 
 	 * @return the schema of the index records
 	 */
-	private static Schema schema(SearchKeyType keyType) {
+	private static Schema schema_centroid(SearchKeyType keyType) {
         Schema sch = new Schema();
-        for (int i = 0; i < keyType.length(); i++) {
-            sch.addField(SCHEMA_VECTOR_PREFIX + i, keyType.get(i));
-        }
+        sch.addField(SCHEMA_CID, INTEGER);
+        sch.addField(SCHEMA_VECTOR, keyType.get(0));
+        // sch.addField(SCHEMA_RID_BLOCK, BIGINT);
+        // sch.addField(SCHEMA_RID_ID, INTEGER);
+        return sch;
+    }
+	private static Schema schema_cluster(SearchKeyType keyType) {
+        Schema sch = new Schema();
+        sch.addField(SCHEMA_ID, INTEGER);
+        sch.addField(SCHEMA_VECTOR, keyType.get(0));
         sch.addField(SCHEMA_RID_BLOCK, BIGINT);
         sch.addField(SCHEMA_RID_ID, INTEGER);
         return sch;
     }
-    // Helper class to represent a vector record
-    private static class VectorRecord {
-        VectorConstant vec;
-        RecordId recordId;
-
-        VectorRecord(VectorConstant vec, RecordId recordId) {
-            this.vec= vec;
-            this.recordId = recordId;
-        }
-    }
     private int numClusters;
     private int clusterID;
-    private List<List<VectorRecord>> clusters;
 	private SearchKey searchKey;
 	private RecordFile rf;
 	private boolean isBeforeFirsted;
+    private String centroidTblname, clusterTblnamePrefix;
     DistanceFn distFn_vec;
     public IVFIndex(IndexInfo ii, SearchKeyType keyType, Transaction tx) {
         super(ii, keyType, tx);
-        this.clusters = new ArrayList<>();
         this.distFn_vec = new EuclideanFn("i_emb");
-    }
-    public static void train(String tblname, List<String> embFields, 
-            String idxName, Transaction tx) {
+        centroidTblname = "cluster_center";
+        clusterTblnamePrefix = "cluster_";
     }
     @Override
     public void preLoadToMemory() {
-        for (int i = 0; i < numClusters; i++) {
-            String tblname = ii.indexName() + i + ".tbl";
-            long size = fileSize(tblname);
-            BlockId blk;
-            for (int j = 0; j < size; j++) {
-                blk = new BlockId(tblname, j);
-                tx.bufferMgr().pin(blk);
-            }
+        // for (int i = 0; i < numClusters; i++) {
+            // String tblname = ii.indexName() + i + ".tbl";
+        long size = fileSize(centroidTblname);
+        BlockId blk;
+        for (int j = 0; j < size; j++) {
+            blk = new BlockId(centroidTblname, j);
+            tx.bufferMgr().pin(blk);
         }
+        // }
     }
     private VectorConstant extractVector(SearchKey key) {
         VectorConstant vec = (VectorConstant) key.get(0);
@@ -112,21 +109,31 @@ public class IVFIndex extends Index {
         return vec;
     }
     private int searchClosestCluster(VectorConstant vec) {
+        System.out.println("searchClosestCluster: " + centroidTblname);
         double minDistance = Double.MAX_VALUE;
         this.distFn_vec.setQueryVector(vec);
         int closestClusterIndex = -1;
-
-        for (int clusterIndex = 0; clusterIndex < clusters.size(); clusterIndex++) {
-            List<VectorRecord> cluster = clusters.get(clusterIndex);
-            for (VectorRecord record : cluster) {
-                double distance = distFn_vec.distance(record.vec);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestClusterIndex = clusterIndex;
-                }
+        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+        // open centroid file
+		this.rf = ti.open(tx, false);
+        rf.beforeFirst();
+        int num_centroids = 0;
+        while(rf.next()) {
+            num_centroids++;
+            Constant cid = rf.getVal(SCHEMA_CID);
+            Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
+            // System.out.println("cid: " + cid + " block: " + block + 
+                // " id: " + id + "vec: " + centroid_vec);
+            System.out.println("cid: " + cid + "vec: " + centroid_vec);
+            double distance = distFn_vec.distance((VectorConstant)centroid_vec);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestClusterIndex = (int) cid.asJavaVal();
             }
         }
-        // System.out.println("closestCluster: " + closestClusterIndex);
+
+        System.out.println("num_centroids in file" + num_centroids);
+        System.out.println("closestCluster: " + closestClusterIndex);
         return closestClusterIndex;
     }
     @Override
@@ -140,8 +147,9 @@ public class IVFIndex extends Index {
         VectorConstant queryVec= extractVector(searchKey);
         this.clusterID = searchClosestCluster(queryVec);
 
-        String tblname = ii.indexName() + this.clusterID;
-        TableInfo ti = new TableInfo(tblname, schema(keyType));
+        String tblname = this.clusterTblnamePrefix + this.clusterID;
+        TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
+        System.out.println("Opening cluster file: " + tblname + ".tbl");
 		// the underlying record file should not perform logging
 		this.rf = ti.open(tx, false);
 
@@ -160,8 +168,7 @@ public class IVFIndex extends Index {
 					+ ii.indexName() + "'");
 
 		while (rf.next())
-			if (getKey().equals(searchKey))
-				return true;
+            return true;
 		return false;
     }
 
@@ -183,8 +190,7 @@ public class IVFIndex extends Index {
 		
 		// insert the data
 		rf.insert();
-		for (int i = 0; i < keyType.length(); i++)
-			rf.setVal(vecFieldName(i), key.get(i));
+        rf.setVal(SCHEMA_VECTOR, key.get(0));
 		rf.setVal(SCHEMA_RID_BLOCK, new BigIntConstant(dataRecordId.block()
 				.number()));
 		rf.setVal(SCHEMA_RID_ID, new IntegerConstant(dataRecordId.id()));
@@ -235,7 +241,7 @@ public class IVFIndex extends Index {
 	private SearchKey getKey() {
 		Constant[] vals = new Constant[keyType.length()];
 		for (int i = 0; i < vals.length; i++)
-			vals[i] = rf.getVal(vecFieldName(i));
+			vals[i] = rf.getVal(SCHEMA_VECTOR);
 		return new SearchKey(vals);
 	}
 }

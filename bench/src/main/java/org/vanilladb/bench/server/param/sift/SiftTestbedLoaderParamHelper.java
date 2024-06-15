@@ -57,8 +57,8 @@ public class SiftTestbedLoaderParamHelper implements StoredProcedureHelper {
     public void prepareParameters(Object... pars) {
         numItems = (Integer) pars[0];
         TABLES_DDL[0] = "CREATE TABLE " + getTableName() + " (i_id INT, i_emb VECTOR(" + N_DIM + "))";
-        // INDEXES_DDL[0] = "CREATE INDEX " + getIdxName() + " ON sift (" +
-        // getIdxFields().get(0) + ") USING IVF";
+        INDEXES_DDL[0] = "CREATE INDEX " + getIdxName() + " ON sift (" +
+        getIdxFields().get(0) + ") USING IVF";
         Cluster_center[0] = "CREATE TABLE cluster_center(c_id INT, i_emb VECTOR(" + N_DIM + "))";
         for (int i = 0; i < N_CLUSTERS; i++) {
             Cluster_table[i] = "CREATE TABLE cluster_" + String.valueOf(i) + " (i_id INT, i_emb VECTOR(" + N_DIM + "))";

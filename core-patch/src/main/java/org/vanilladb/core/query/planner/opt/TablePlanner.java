@@ -176,7 +176,7 @@ class TablePlanner {
 	 * that help the identification: e.g., "F < C", not "F - C < 0".
 	 */
 	private Plan makeIndexSelectPlan() {
-		System.out.println("MakeIndexSelectPlan, vec: " + this.embField.getQueryVector());
+		// System.out.println("MakeIndexSelectPlan, vec: " + this.embField.getQueryVector());
 		return IndexSelector.selectByBestMatchedIndex(tblName, tp, pred, tx, this.embField);
 	}
 

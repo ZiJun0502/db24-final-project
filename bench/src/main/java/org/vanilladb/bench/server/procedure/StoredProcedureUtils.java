@@ -30,6 +30,7 @@ import org.vanilladb.core.query.algebra.TablePlan;
 import org.vanilladb.core.query.parse.InsertData;
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.Constant;
+import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.Record;
 import org.vanilladb.core.sql.RecordComparator;
 import org.vanilladb.core.sql.VectorConstant;
@@ -40,25 +41,7 @@ import org.vanilladb.core.storage.index.ivf.IVFIndex;
 
 import java.util.SortedSet;
 public class StoredProcedureUtils {
-	public static void executeTrainIndex(String tblname, List<String> embFields, 
-            String idxName, Transaction tx) {
-		Plan p = new TablePlan(tblname, tx);
-		DistanceFn distFn = new EuclideanFn(embFields.get(0));
-		System.out.println("SP utils execute train index, table: " + tblname);
-		Scan s = p.open();
-		TableScan ts = (TableScan)s;
-		SortedSet<String> fields = ts.schema.fields();
-		System.out.println("FIELDS:");
-		for (String f : fields) {
-			System.out.println(f);
-		}
-		s.beforeFirst();
-		while (s.next()) {
-			// System.out.println("id: " + s.getVal("i_id") + 
-			// "i_emb: " + s.getVal("i_emb"));
-		}
-		s.close();
-	}
+
 	public static Scan executeQuery(String sql, Transaction tx) {
 		Plan p = VanillaDb.newPlanner().createQueryPlan(sql, tx);
 		return p.open();

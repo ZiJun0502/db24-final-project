@@ -41,8 +41,8 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         // Generate item records
         generateItems(0);
 
-        if (logger.isLoggable(Level.INFO))
-            logger.info("Training IVF index...");
+        // if (logger.isLoggable(Level.INFO))
+        //     logger.info("Training IVF index...");
 
         // StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(),
         // getHelper().getIdxFields(),
@@ -83,10 +83,10 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
             logger.info("Creating indexes...");
 
         // Create indexes
-        // for (String sql : paramHelper.getIndexSchemas()) {
-        // System.out.println(sql);
-        // StoredProcedureUtils.executeUpdate(sql, tx);
-        // }
+        for (String sql : paramHelper.getIndexSchemas()) {
+            // System.out.println(sql);
+            StoredProcedureUtils.executeUpdate(sql, tx);
+        }
 
         // shuchen
         // Create cluster tables
@@ -177,7 +177,7 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         }
 
         float[][] kmeans_centroids = Kmeans.getCentroids();
-
+        // StoredProcedureUtils.loadToIndex(k, kmeans_centroids);
         for (int i = 0; i < k; i++) {
             float[] rawVector = new float[dim];
             for (int j = 0; j < dim; j++) {
