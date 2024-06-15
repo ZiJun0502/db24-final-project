@@ -22,10 +22,10 @@ import org.vanilladb.bench.rte.RemoteTerminalEmulator;
 
 public class VanillaBench {
 	private static Logger logger = Logger.getLogger(VanillaBench.class.getName());
-	
+
 	private SutDriver driver;
 	private Benchmark benchmarker;
-	
+
 	public VanillaBench() {
 		driver = newDriver();
 		benchmarker = newBenchmarker();
@@ -67,7 +67,7 @@ public class VanillaBench {
 
 			if (logger.isLoggable(Level.INFO))
 				logger.info("creating " + VanillaBenchParameters.NUM_RTES + " emulators...");
-			
+
 			StatisticMgr statMgr = newStatisticMgr(benchmarker);
 			int rteCount = benchmarker.getNumOfRTEs();
 			RemoteTerminalEmulator<?>[] emulators = new RemoteTerminalEmulator[rteCount];
@@ -110,9 +110,10 @@ public class VanillaBench {
 			// notify RTEs for recording statistics
 			for (int i = 0; i < emulators.length; i++)
 				emulators[i].startRecordStatistic();
-
+			logger.info("testtest");
 			// waiting
 			Thread.sleep(VanillaBenchParameters.BENCHMARK_INTERVAL);
+			logger.info("testtesttttt");
 
 			if (logger.isLoggable(Level.INFO))
 				logger.info("benchmark period finished. Stopping RTEs...");
@@ -121,8 +122,8 @@ public class VanillaBench {
 			for (int i = 0; i < emulators.length; i++)
 				emulators[i].stopBenchmark();
 
-			if (VanillaBenchParameters.BENCH_TYPE == BenchType.ANN || 
-				VanillaBenchParameters.BENCH_TYPE == BenchType.SIFT) {
+			if (VanillaBenchParameters.BENCH_TYPE == BenchType.ANN ||
+					VanillaBenchParameters.BENCH_TYPE == BenchType.SIFT) {
 				if (logger.isLoggable(Level.INFO))
 					logger.info("Calculating recall...");
 				SutConnection newConn = getConnection();
@@ -134,7 +135,7 @@ public class VanillaBench {
 					SiftRte siftRte = ((SiftRte) rte);
 					siftRte.executeCalculateRecall(newConn);
 				}
-				
+
 			}
 
 			if (VanillaBenchParameters.PROFILING_ON_SERVER) {
@@ -164,40 +165,40 @@ public class VanillaBench {
 	}
 
 	// private void calculateRecall(StatisticMgr statMgr) throws SQLException {
-	// 	SutConnection conn = getConnection();
-	// 	AnnRte recallRte = new AnnRte(conn, statMgr, 0);
-	// 	recallRte.executeCalculateRecall(conn);
+	// SutConnection conn = getConnection();
+	// AnnRte recallRte = new AnnRte(conn, statMgr, 0);
+	// recallRte.executeCalculateRecall(conn);
 	// }
-	
+
 	private SutDriver newDriver() {
 		// Create a driver for connection
 		switch (VanillaBenchParameters.CONNECTION_MODE) {
-		case JDBC:
-			return new VanillaDbJdbcDriver();
-		case SP:
-			return new VanillaDbSpDriver();
+			case JDBC:
+				return new VanillaDbJdbcDriver();
+			case SP:
+				return new VanillaDbSpDriver();
 		}
 		return null;
 	}
-	
+
 	private Benchmark newBenchmarker() {
 		switch (VanillaBenchParameters.BENCH_TYPE) {
-		case MICRO:
-			return new MicroBenchmark();
-		case TPCC:
-			return new TpccBenchmark();
-		case TPCE:
-			return new TpceBenchmark();
-		case YCSB:
-			return new YcsbBenchmark();
-		case ANN:
-			return new AnnBenchmark();
-		case SIFT:
-			return new SiftBenchmark();
+			case MICRO:
+				return new MicroBenchmark();
+			case TPCC:
+				return new TpccBenchmark();
+			case TPCE:
+				return new TpceBenchmark();
+			case YCSB:
+				return new YcsbBenchmark();
+			case ANN:
+				return new AnnBenchmark();
+			case SIFT:
+				return new SiftBenchmark();
 		}
 		throw new RuntimeException("Unsupported benchmark type: " + VanillaBenchParameters.BENCH_TYPE);
 	}
-	
+
 	private StatisticMgr newStatisticMgr(Benchmark benchmarker) {
 		Set<BenchTransactionType> txnTypes = benchmarker.getBenchmarkingTxTypes();
 		String reportPostfix = benchmarker.getBenchmarkName();
@@ -205,10 +206,9 @@ public class VanillaBench {
 				txnTypes,
 				VanillaBenchParameters.REPORT_OUTPUT_DIRECTORY,
 				reportPostfix,
-				VanillaBenchParameters.REPORT_TIMELINE_GRANULARITY
-		);
+				VanillaBenchParameters.REPORT_TIMELINE_GRANULARITY);
 	}
-	
+
 	private SutConnection getConnection() throws SQLException {
 		return driver.connectToSut();
 	}

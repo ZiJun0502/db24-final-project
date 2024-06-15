@@ -17,9 +17,11 @@ package org.vanilladb.bench.server.procedure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 import static org.vanilladb.core.sql.RecordComparator.DIR_DESC;
 
@@ -38,20 +40,33 @@ import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.distfn.EuclideanFn;
 import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.storage.index.ivf.IVFIndex;
+import org.vanilladb.core.storage.metadata.index.IndexInfo;
 
 import java.util.SortedSet;
+
 public class StoredProcedureUtils {
+
+	public static void executeTrainIndex(String tableName, List<String> idxFields, String idxName, Transaction tx,
+			int num_items, int dim) {
+		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
+
+		if (iis.size() != 0) {
+			// System.out.println("iis.size" + iis.size());
+			IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
+			ivf.executeTrainIndex(num_items, dim);
+		}
+	}
 
 	public static Scan executeQuery(String sql, Transaction tx) {
 		Plan p = VanillaDb.newPlanner().createQueryPlan(sql, tx);
 		return p.open();
 	}
-	
+
 	public static int executeUpdate(String sql, Transaction tx) {
 		return VanillaDb.newPlanner().executeUpdate(sql, tx);
 	}
 
-	static class MapRecord implements Record{
+	static class MapRecord implements Record {
 
 		Map<String, Constant> fldVals = new HashMap<>();
 
@@ -70,45 +85,46 @@ public class StoredProcedureUtils {
 	}
 
 	static class PriorityQueueScan implements Scan {
-        private PriorityQueue<MapRecord> pq;
-        private boolean isBeforeFirsted = false;
+		private PriorityQueue<MapRecord> pq;
+		private boolean isBeforeFirsted = false;
 
-        public PriorityQueueScan(PriorityQueue<MapRecord> pq) {
-            this.pq = pq;
-        }
+		public PriorityQueueScan(PriorityQueue<MapRecord> pq) {
+			this.pq = pq;
+		}
 
-        @Override
-        public Constant getVal(String fldName) {
-            return pq.peek().getVal(fldName);
-        }
+		@Override
+		public Constant getVal(String fldName) {
+			return pq.peek().getVal(fldName);
+		}
 
-        @Override
-        public void beforeFirst() {
-            this.isBeforeFirsted = true;
-        }
+		@Override
+		public void beforeFirst() {
+			this.isBeforeFirsted = true;
+		}
 
-        @Override
-        public boolean next() {
-            if (isBeforeFirsted) {
-                isBeforeFirsted = false;
-                return true;
-            }
-            pq.poll();
-            return pq.size() > 0;
-        }
+		@Override
+		public boolean next() {
+			if (isBeforeFirsted) {
+				isBeforeFirsted = false;
+				return true;
+			}
+			pq.poll();
+			return pq.size() > 0;
+		}
 
-        @Override
-        public void close() {
-            return;
-        }
+		@Override
+		public void close() {
+			return;
+		}
 
-        @Override
-        public boolean hasField(String fldName) {
-            return pq.peek().containsKey(fldName);
-        }
-    }
+		@Override
+		public boolean hasField(String fldName) {
+			return pq.peek().containsKey(fldName);
+		}
+	}
 
-	public static Scan executeCalculateRecall(VectorConstant query, String tableName, String field, int limit, Transaction tx) {
+	public static Scan executeCalculateRecall(VectorConstant query, String tableName, String field, int limit,
+			Transaction tx) {
 		Plan p = new TablePlan(tableName, tx);
 
 		DistanceFn distFn = new EuclideanFn(field);
@@ -116,14 +132,14 @@ public class StoredProcedureUtils {
 
 		List<String> sortFlds = new ArrayList<String>();
 		sortFlds.add(distFn.fieldName());
-		
+
 		List<Integer> sortDirs = new ArrayList<Integer>();
 		sortDirs.add(DIR_DESC); // for priority queue
 
 		RecordComparator comp = new RecordComparator(sortFlds, sortDirs, distFn);
 
 		PriorityQueue<MapRecord> pq = new PriorityQueue<>(limit, (MapRecord r1, MapRecord r2) -> comp.compare(r1, r2));
-		
+
 		Scan s = p.open();
 		s.beforeFirst();
 		while (s.next()) {

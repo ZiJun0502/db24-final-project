@@ -73,13 +73,13 @@ public class CatalogMgr {
 	public void dropIndex(String idxName, Transaction tx) {
 		idxMgr.dropIndex(idxName, tx);
 	}
-	
+
 	public Set<String> getIndexedFields(String tblName, Transaction tx) {
-		System.out.println("Getting idxMgr Indexed Field for Table " + tblName);
+		// System.out.println("Getting idxMgr Indexed Field for Table " + tblName);
 		return idxMgr.getIndexedFields(tblName, tx);
 	}
 
-	public List<IndexInfo> getIndexInfo(String tblName, String fldName, 
+	public List<IndexInfo> getIndexInfo(String tblName, String fldName,
 			Transaction tx) {
 		return idxMgr.getIndexInfo(tblName, fldName, tx);
 	}

@@ -44,7 +44,7 @@ public class HeuristicQueryPlanner implements QueryPlanner {
 	 */
 	@Override
 	public Plan createPlan(QueryData data, Transaction tx) {
-		System.out.println("Heuristic Create Plan");
+		// System.out.println("Heuristic Create Plan");
 		// Step 1: Create a TablePlanner object for each mentioned table/view
 		int id = 0;
 		for (String tbl : data.tables()) {
@@ -84,7 +84,7 @@ public class HeuristicQueryPlanner implements QueryPlanner {
 		// Step 7: Add a limit plan if specified
 		if (data.limit() != -1)
 			trunk = new LimitPlan(trunk, data.limit());
-			
+
 		// Step 8: Add a explain plan if the query is explain statement
 		if (data.isExplain())
 			trunk = new ExplainPlan(trunk);
@@ -92,7 +92,7 @@ public class HeuristicQueryPlanner implements QueryPlanner {
 	}
 
 	private Plan getLowestSelectPlan() {
-		System.out.println("Heuristic GetLowSelect");
+		// System.out.println("Heuristic GetLowSelect");
 		TablePlanner bestTp = null;
 		Plan bestPlan = null;
 		Plan bestView = null;

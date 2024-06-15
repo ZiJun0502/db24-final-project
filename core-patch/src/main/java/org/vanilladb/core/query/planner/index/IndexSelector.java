@@ -35,40 +35,40 @@ import org.vanilladb.core.storage.tx.Transaction;
 public class IndexSelector {
 
 	public static IndexSelectPlan selectByBestMatchedIndex(String tblName,
-			TablePlan tablePlan, Predicate pred, Transaction tx, 
+			TablePlan tablePlan, Predicate pred, Transaction tx,
 			DistanceFn embField) {
-		
+
 		Set<IndexInfo> candidates = new HashSet<IndexInfo>();
-		System.out.println("IndexSelector selectByBest");
+		// System.out.println("IndexSelector selectByBest");
 		for (String fieldName : VanillaDb.catalogMgr().getIndexedFields(tblName, tx)) {
 			ConstantRange searchRange = pred.constantRange(fieldName);
-			System.out.println("IndexSelector:" + fieldName);
-			System.out.println("IndexSelector, embField: " + (embField == null));
+			// System.out.println("IndexSelector:" + fieldName);
+			// System.out.println("IndexSelector, embField: " + (embField == null));
 			if (searchRange == null && embField == null)
 				continue;
-			
+
 			List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblName, fieldName, tx);
 			candidates.addAll(iis);
 		}
-		
+
 		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx, embField);
 	}
-	
+
 	public static IndexSelectPlan selectByBestMatchedIndex(String tblName,
-			TablePlan tablePlan, Predicate pred, Transaction tx, Collection<String> excludedFields, 
+			TablePlan tablePlan, Predicate pred, Transaction tx, Collection<String> excludedFields,
 			DistanceFn embField) {
-		
+
 		Set<IndexInfo> candidates = new HashSet<IndexInfo>();
 		for (String fieldName : VanillaDb.catalogMgr().getIndexedFields(tblName, tx)) {
 			System.out.println("selectByBest fields:" + fieldName);
 			System.out.println("selectByBest emb:" + embField.fieldName());
 			if (excludedFields.contains(fieldName))
 				continue;
-			
+
 			ConstantRange searchRange = pred.constantRange(fieldName);
 			if (searchRange == null && embField == null)
 				continue;
-			
+
 			List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblName, fieldName, tx);
 			for (IndexInfo ii : iis) {
 				boolean ignored = false;
@@ -77,35 +77,34 @@ public class IndexSelector {
 						ignored = true;
 						break;
 					}
-				
+
 				if (!ignored)
 					candidates.add(ii);
 			}
 		}
-		
+
 		return selectByBestMatchedIndex(candidates, tablePlan, pred, tx, embField);
 	}
-	
+
 	public static IndexSelectPlan selectByBestMatchedIndex(Set<IndexInfo> candidates,
-			TablePlan tablePlan, Predicate pred, Transaction tx, 
+			TablePlan tablePlan, Predicate pred, Transaction tx,
 			DistanceFn embField) {
 		// Choose the index with the most matched fields in the predicate
-		System.out.println("IndexSelector candidate selectByBest");
+		// System.out.println("IndexSelector candidate selectByBest");
 		System.out.println("Candidates Size: " + candidates.size());
 		int matchedCount = 0;
 		IndexInfo bestIndex = null;
 		Map<String, ConstantRange> searchRanges = null;
-		
+
 		for (IndexInfo ii : candidates) {
 			if (ii.fieldNames().size() < matchedCount)
 				continue;
-			
+
 			Map<String, ConstantRange> ranges = new HashMap<String, ConstantRange>();
 			for (String fieldName : ii.fieldNames()) {
-				System.out.println("FIELDNAME: " + fieldName);
+				// System.out.println("FIELDNAME: " + fieldName);
 				ConstantRange searchRange = pred.constantRange(fieldName);
-				if (searchRange != null && (
-						(ii.indexType() == IndexType.HASH && searchRange.isConstant())
+				if (searchRange != null && ((ii.indexType() == IndexType.HASH && searchRange.isConstant())
 						|| ii.indexType() == IndexType.BTREE))
 					ranges.put(fieldName, searchRange);
 				else if (ii.indexType() == IndexType.IVF) {
@@ -113,19 +112,19 @@ public class IndexSelector {
 					ranges.put("i_emb", searchRange);
 				}
 			}
-			
+
 			if (ranges.size() > matchedCount) {
 				matchedCount = ranges.size();
 				bestIndex = ii;
 				searchRanges = ranges;
 			}
 		}
-		System.out.println("IndexSelector, BestIndex: " + bestIndex.fieldNames());
-		
+		// System.out.println("IndexSelector, BestIndex: " + bestIndex.fieldNames());
+
 		if (bestIndex != null) {
 			return new IndexSelectPlan(tablePlan, bestIndex, searchRanges, tx);
 		}
-		
+
 		return null;
 	}
 }

@@ -19,22 +19,22 @@ public class SiftBenchParamHelper implements StoredProcedureHelper {
     private int numNeighbors = 20; // Number of top-k
 
     private int insertCount = 0;
-    private ArrayList<Object[]> insertHistory  = new ArrayList<>();
+    private ArrayList<Object[]> insertHistory = new ArrayList<>();
 
     @Override
     public void prepareParameters(Object... pars) {
         numDimension = (Integer) pars[0];
         float[] rawVector = new float[numDimension];
         for (int i = 0; i < numDimension; i++) {
-            rawVector[i] = (float) pars[i+1];
+            rawVector[i] = (float) pars[i + 1];
         }
         query = new VectorConstant(rawVector);
         items = new Integer[numNeighbors];
 
-        if (pars.length > numDimension+1){
-            insertCount = (Integer) pars[numDimension+1];
+        if (pars.length > numDimension + 1) {
+            insertCount = (Integer) pars[numDimension + 1];
             int ptr = numDimension + 2;
-            for (int i = 0; i < insertCount; i++){
+            for (int i = 0; i < insertCount; i++) {
                 Object[] insertParam = new Object[numDimension + 1];
                 for (int j = 0; j < numDimension + 1; j++) {
                     insertParam[j] = pars[ptr + j + 1];
@@ -61,6 +61,7 @@ public class SiftBenchParamHelper implements StoredProcedureHelper {
         rec.setVal("rc", new IntegerConstant(numNeighbors));
 
         for (int i = 0; i < numNeighbors; i++) {
+            // System.out.println("id_" + i + " " + items[i]);
             rec.setVal("id_" + i, new IntegerConstant(items[i]));
         }
         return rec;
@@ -91,7 +92,7 @@ public class SiftBenchParamHelper implements StoredProcedureHelper {
         return numNeighbors;
     }
 
-    public int getInsertCount(){
+    public int getInsertCount() {
         return insertCount;
     }
 
