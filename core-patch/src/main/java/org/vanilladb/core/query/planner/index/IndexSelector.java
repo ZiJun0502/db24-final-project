@@ -91,7 +91,7 @@ public class IndexSelector {
 			DistanceFn embField) {
 		// Choose the index with the most matched fields in the predicate
 		// System.out.println("IndexSelector candidate selectByBest");
-		System.out.println("Candidates Size: " + candidates.size());
+		// System.out.println("Candidates Size: " + candidates.size());
 		int matchedCount = 0;
 		IndexInfo bestIndex = null;
 		Map<String, ConstantRange> searchRanges = null;

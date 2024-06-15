@@ -17,5 +17,5 @@ public class EuclideanFn extends DistanceFn {
         }
         return Math.sqrt(sum);
     }
-    
+
 }

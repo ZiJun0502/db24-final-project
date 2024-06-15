@@ -16,21 +16,6 @@ import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
 import org.vanilladb.core.storage.tx.Transaction;
 
-class Pair implements Comparable<Pair> {
-    Integer key;
-    float value;
-
-    public Pair(Integer key, float value) {
-        this.key = key;
-        this.value = value;
-    }
-
-    @Override
-    public int compareTo(Pair other) {
-        return Float.compare(this.value, other.value);
-    }
-}
-
 public class SiftBenchProc extends StoredProcedure<SiftBenchParamHelper> {
 
     private static final int top_K_cluster = 20;

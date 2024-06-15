@@ -79,53 +79,53 @@ public class KMeans_1 {
         ArrayList<Double[]> centroids = new ArrayList<Double[]>();
         // implement kmeans++ algorithm
 
-        int first_idx = random.nextInt(num_items);
-        centroids.add(records.get(first_idx).getRecord());
+        // int first_idx = random.nextInt(num_items);
+        // centroids.add(records.get(first_idx).getRecord());
 
-        for (int i = 1; i < k; i++) {
-            // System.out.println("kmeans init " + i);
-            double[] dist = new double[num_items];
-            double sum = 0;
-            for (int j = 0; j < num_items; j++) {
-                double min_dist = Double.MAX_VALUE;
-                for (int c = 0; c < i; c++) {
-                    double d = 0;
-                    d = recordDis(records.get(j).getRecord(), centroids.get(c));
-                    min_dist = Math.min(min_dist, d);
-                }
-                dist[j] = min_dist;
-                sum += min_dist;
-            }
+        // for (int i = 1; i < k; i++) {
+        // // System.out.println("kmeans init " + i);
+        // double[] dist = new double[num_items];
+        // double sum = 0;
+        // for (int j = 0; j < num_items; j++) {
+        // double min_dist = Double.MAX_VALUE;
+        // for (int c = 0; c < i; c++) {
+        // double d = 0;
+        // d = recordDis(records.get(j).getRecord(), centroids.get(c));
+        // min_dist = Math.min(min_dist, d);
+        // }
+        // dist[j] = min_dist;
+        // sum += min_dist;
+        // }
 
-            double r = random.nextDouble() * sum;
-            double tmp = 0;
-            for (int j = 0; j < num_items; j++) {
-                tmp += dist[j];
-                if (tmp >= r) {
-                    centroids.add(records.get(j).getRecord());
-                    records.get(j).setCluster(i);
-                    break;
-                }
-            }
-        }
+        // double r = random.nextDouble() * sum;
+        // double tmp = 0;
+        // for (int j = 0; j < num_items; j++) {
+        // tmp += dist[j];
+        // if (tmp >= r) {
+        // centroids.add(records.get(j).getRecord());
+        // records.get(j).setCluster(i);
+        // break;
+        // }
+        // }
+        // }
 
         // print centroids number
 
-        System.out.println("centroids size " + centroids.size());
+        // System.out.println("centroids size " + centroids.size());
 
         // random select k centroids, make sure no duplicate
 
-        // ArrayList<Integer> idx = new ArrayList<Integer>();
-        // for (int i = 0; i < num_items; i++) {
-        // idx.add(i);
-        // }
+        ArrayList<Integer> idx = new ArrayList<Integer>();
+        for (int i = 0; i < num_items; i++) {
+            idx.add(i);
+        }
 
-        // Collections.shuffle(idx);
+        Collections.shuffle(idx);
 
-        // for (int i = 0; i < k; i++) {
-        // centroids.add(records.get(idx.get(i)).getRecord());
-        // records.get(idx.get(i)).setCluster(i);
-        // }
+        for (int i = 0; i < k; i++) {
+            centroids.add(records.get(idx.get(i)).getRecord());
+            records.get(idx.get(i)).setCluster(i);
+        }
 
         return centroids;
     }
@@ -152,7 +152,7 @@ public class KMeans_1 {
 
         Boolean flag = true;
         int it = 0;
-        while (it < 10 && flag) {
+        while (it < 100 && flag) {
             // System.out.println("kmeans iteration " + it);
             it++;
             Double new_err = 0.0;
@@ -200,10 +200,11 @@ public class KMeans_1 {
                 }
             }
 
-            if (Math.abs(err - new_err) < 1e-6) {
-                System.out.println("kmeans converge" + Math.abs(err - new_err));
-                break;
-            }
+            // if (Math.abs(err - new_err) < 5) {
+            // System.out.println("kmeans converge" + Math.abs(err - new_err));
+            // break;
+            // }
+            System.out.println("kmeans converge" + new_err + " " + it);
             err = new_err;
         }
 
@@ -218,23 +219,36 @@ public class KMeans_1 {
 
     // return records with cluster id
 
-    public ArrayList<String>[] getOutput() {
+    public int[] getOutput() {
         // k arraylist, each contains data with cluster id
-        output = new ArrayList[k];
+        // output = new ArrayList[k];
 
-        for (int i = 0; i < num_items; i++) {
-            int cluster_id = records.get(i).getCluster();
-            if (output[cluster_id] == null) {
-                output[cluster_id] = new ArrayList<String>();
-            }
-            String s_vec = "";
-            for (int j = 0; j < dim; j++) {
-                s_vec += records.get(i).getRecord()[j] + (j == dim - 1 ? "" : " ");
-            }
-            output[cluster_id].add(s_vec);
+        // for (int i = 0; i < num_items; i++) {
+        // int cluster_id = records.get(i).getCluster();
+        // if (output[cluster_id] == null) {
+        // output[cluster_id] = new ArrayList<String>();
+        // }
+        // String s_vec = "";
+        // for (int j = 0; j < dim; j++) {
+        // s_vec += records.get(i).getRecord()[j] + (j == dim - 1 ? "" : " ");
+        // }
+        // output[cluster_id].add(s_vec);
+        // }
+
+        // return output;
+
+        int[] cluster = new int[k];
+
+        // init 0
+        for (int i = 0; i < k; i++) {
+            cluster[i] = 0;
         }
 
-        return output;
+        for (int i = 0; i < num_items; i++) {
+            cluster[records.get(i).getCluster()]++;
+        }
+
+        return cluster;
 
     }
 

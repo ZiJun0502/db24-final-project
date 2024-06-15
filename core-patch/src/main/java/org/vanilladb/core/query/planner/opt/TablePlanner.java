@@ -56,11 +56,11 @@ class TablePlanner {
 	 * useful.
 	 * 
 	 * @param tblName
-	 *            the name of the table
+	 *                the name of the table
 	 * @param pred
-	 *            the query predicate
+	 *                the query predicate
 	 * @param tx
-	 *            the calling transaction
+	 *                the calling transaction
 	 */
 	public TablePlanner(String tblName, Predicate pred, Transaction tx, int id) {
 		this.tblName = tblName;
@@ -89,7 +89,7 @@ class TablePlanner {
 			}
 		}
 	}
-	
+
 	/**
 	 * An unique number to this planner.
 	 * 
@@ -98,11 +98,11 @@ class TablePlanner {
 	public int getId() {
 		return id;
 	}
-	
+
 	/**
 	 * Use binary to represent the combination
 	 */
-	@ Override
+	@Override
 	public int hashCode() {
 		return hashCode;
 	}
@@ -114,11 +114,11 @@ class TablePlanner {
 	 * @return a select plan for the table.
 	 */
 	public Plan makeSelectPlan() {
-		System.out.println("MakeSelectPlan");
+		// System.out.println("MakeSelectPlan");
 		Plan p = makeIndexSelectPlan();
 		if (p == null)
 			p = tp;
-		p =  addSelectPredicate(p);
+		p = addSelectPredicate(p);
 		if (embField != null) {
 			p = new NearestNeighborPlan(p, embField, tx);
 		}
@@ -136,7 +136,7 @@ class TablePlanner {
 	 * </p>
 	 * 
 	 * @param trunk
-	 *            the specified trunk of join
+	 *              the specified trunk of join
 	 * @return a join plan of the trunk and this table
 	 */
 	public Plan makeJoinPlan(Plan trunk) {
@@ -159,7 +159,7 @@ class TablePlanner {
 	 * </p>
 	 * 
 	 * @param trunk
-	 *            the specified trunk of join
+	 *              the specified trunk of join
 	 * @return a product plan of the trunk and this table
 	 */
 	public Plan makeProductPlan(Plan trunk) {
@@ -176,7 +176,8 @@ class TablePlanner {
 	 * that help the identification: e.g., "F < C", not "F - C < 0".
 	 */
 	private Plan makeIndexSelectPlan() {
-		// System.out.println("MakeIndexSelectPlan, vec: " + this.embField.getQueryVector());
+		// System.out.println("MakeIndexSelectPlan, vec: " +
+		// this.embField.getQueryVector());
 		return IndexSelector.selectByBestMatchedIndex(tblName, tp, pred, tx, this.embField);
 	}
 
@@ -192,14 +193,14 @@ class TablePlanner {
 		int matchedCount = 0;
 		IndexInfo bestIndex = null;
 		Map<String, String> bestJoinPairs = null; // <Outer Field -> Self Field>
-		
+
 		// Find the indexes that have fields joined with the target table
 		Set<IndexInfo> candidates = new HashSet<IndexInfo>();
 		for (String fieldName : sch.fields()) {
 			Set<String> outerFlds = pred.joinFields(fieldName);
 			if (outerFlds == null)
 				continue;
-			
+
 			for (String outerFld : outerFlds)
 				if (trunkSch.hasField(outerFld)) {
 					List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblName, fieldName, tx);
@@ -207,12 +208,12 @@ class TablePlanner {
 					break;
 				}
 		}
-		
+
 		// Find the indexes with the most joined fields
 		for (IndexInfo ii : candidates) {
 			if (ii.fieldNames().size() < matchedCount)
 				continue;
-			
+
 			Map<String, String> joinPairs = new HashMap<String, String>();
 			for (String fieldName : ii.fieldNames()) {
 				Set<String> outerFlds = pred.joinFields(fieldName);
@@ -222,14 +223,14 @@ class TablePlanner {
 						break;
 					}
 			}
-			
+
 			if (joinPairs.size() > matchedCount) {
 				matchedCount = joinPairs.size();
 				bestIndex = ii;
 				bestJoinPairs = joinPairs;
 			}
 		}
-		
+
 		if (bestIndex != null) {
 			Plan p = new IndexJoinPlan(trunk, tp, bestIndex, bestJoinPairs, tx);
 			/*
@@ -242,7 +243,7 @@ class TablePlanner {
 			p = addSelectPredicate(p);
 			return addJoinPredicate(p, trunkSch);
 		}
-		
+
 		return null;
 	}
 

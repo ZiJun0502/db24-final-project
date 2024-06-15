@@ -12,7 +12,7 @@ public class SiftTestbedLoaderParamHelper implements StoredProcedureHelper {
     private static final String TABLES_DDL[] = new String[1];
     private static final String INDEXES_DDL[] = new String[1];
     private static final int N_DIM = 128;
-    private static final int N_CLUSTERS = 400;
+    private static final int N_CLUSTERS = 100;
     private static final String Cluster_table[] = new String[N_CLUSTERS];
     private static final String Cluster_center[] = new String[1];
 

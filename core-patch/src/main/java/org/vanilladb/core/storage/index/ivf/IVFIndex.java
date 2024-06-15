@@ -42,7 +42,7 @@ public class IVFIndex extends Index {
     private static final int NUM_CLUSTERS;
 
     static {
-        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 400);
+        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 100);
     }
 
     // private static String vecFieldName(int index) {
@@ -75,6 +75,15 @@ public class IVFIndex extends Index {
     private static Schema schema_cluster(SearchKeyType keyType) {
         Schema sch = new Schema();
         sch.addField(SCHEMA_ID, INTEGER);
+        // sch.addField(SCHEMA_VECTOR, keyType.get(0));
+        sch.addField(SCHEMA_RID_BLOCK, BIGINT);
+        sch.addField(SCHEMA_RID_ID, INTEGER);
+        return sch;
+    }
+
+    private static Schema schema_cluster_1(SearchKeyType keyType) {
+        Schema sch = new Schema();
+        sch.addField(SCHEMA_ID, INTEGER);
         sch.addField(SCHEMA_VECTOR, keyType.get(0));
         sch.addField(SCHEMA_RID_BLOCK, BIGINT);
         sch.addField(SCHEMA_RID_ID, INTEGER);
@@ -89,7 +98,7 @@ public class IVFIndex extends Index {
     private RecordFile rf;
     private boolean isBeforeFirsted;
     private String centroidTblname, clusterTblnamePrefix;
-    private boolean isInited = false;
+    private boolean iscluser_1 = false;
 
     DistanceFn distFn_vec;
 
@@ -156,8 +165,14 @@ public class IVFIndex extends Index {
         this.searchKey = searchRange.asSearchKey();
         VectorConstant queryVec = extractVector(searchKey);
         this.clusterID = searchClosestCluster(queryVec);
+
         String tblname = this.clusterTblnamePrefix + this.clusterID;
         TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
+        iscluser_1 = false;
+        if (tblname.equals("cluster_-1")) {
+            ti = new TableInfo(tblname, schema_cluster_1(keyType));
+            iscluser_1 = true;
+        }
         // System.out.println("Opening cluster file: " + tblname + ".tbl");
         // the underlying record file should not perform logging
         this.rf = ti.open(tx, false);
@@ -168,6 +183,7 @@ public class IVFIndex extends Index {
         rf.beforeFirst();
 
         isBeforeFirsted = true;
+
     }
 
     @Override
@@ -175,9 +191,9 @@ public class IVFIndex extends Index {
         if (!isBeforeFirsted)
             throw new IllegalStateException("You must call beforeFirst() before iterating index '"
                     + ii.indexName() + "'");
-
         while (rf.next())
             return true;
+
         return false;
     }
 
@@ -189,8 +205,9 @@ public class IVFIndex extends Index {
     }
 
     public void read_key_from_cluster_file() {
+        // close();
         // read key from cluster_-1.tbl
-        TableInfo ti = new TableInfo(clusterTblnamePrefix + "-1", schema_cluster(keyType));
+        TableInfo ti = new TableInfo(clusterTblnamePrefix + "-1", schema_cluster_1(keyType));
         RecordFile rf = ti.open(tx, false);
         rf.beforeFirst();
         while (rf.next()) {
@@ -204,11 +221,8 @@ public class IVFIndex extends Index {
     public void executeTrainIndex(int num_items, int dim) {
         // read key from cluster_-1.tbl
         read_key_from_cluster_file();
+        // close();
         float[][] kmeans_input = new float[num_items][dim];
-        // store key.vals[1] to kmeans_input
-
-        // System.out.println("keys.size(): " + keys.size());
-        // System.out.println("recordIds.size(): " + recordIds.size());
         for (int i = 0; i < num_items; i++) {
             VectorConstant vec = (VectorConstant) keys.get(i).get(0);
             float[] rawVector = new float[dim];
@@ -219,7 +233,7 @@ public class IVFIndex extends Index {
         }
         KMeans_1 Kmeans = new KMeans_1(kmeans_input, num_items, dim, NUM_CLUSTERS);
         Kmeans.run();
-        ArrayList<String>[] kmeans_output = Kmeans.getOutput();
+        int[] kmeans_output = Kmeans.getOutput();
         float[][] kmeans_centroids = Kmeans.getCentroids();
 
         // store kmeans_centroids to centroid file
@@ -239,19 +253,20 @@ public class IVFIndex extends Index {
 
         // store kmeans_output to cluster files
         for (int i = 0; i < NUM_CLUSTERS; ++i) {
+            // close();
             // System.out.println("cluster_" + i);
             String tblname = clusterTblnamePrefix + i;
             TableInfo cluster_ti = new TableInfo(tblname, schema_cluster(keyType));
-            RecordFile cluster_rf = cluster_ti.open(tx, true);
-            if (cluster_rf.fileSize() == 0)
+            rf = cluster_ti.open(tx, true);
+            if (rf.fileSize() == 0)
                 RecordFile.formatFileHeader(cluster_ti.fileName(), tx);
-            cluster_rf.beforeFirst();
-            for (int j = 0; j < kmeans_output[i].size(); j++) {
-                cluster_rf.insert();
-                VectorConstant vector = new VectorConstant(kmeans_output[i].get(j));
-                cluster_rf.setVal(SCHEMA_VECTOR, vector);
-                cluster_rf.setVal(SCHEMA_RID_BLOCK, new BigIntConstant(recordIds.get(j).block().number()));
-                cluster_rf.setVal(SCHEMA_RID_ID, new IntegerConstant(recordIds.get(j).id()));
+            rf.beforeFirst();
+            for (int j = 0; j < kmeans_output[i]; j++) {
+                rf.insert();
+                // VectorConstant vector = new VectorConstant(kmeans_output[i].get(j));
+                // rf.setVal(SCHEMA_VECTOR, vector);
+                rf.setVal(SCHEMA_RID_BLOCK, new BigIntConstant(recordIds.get(j).block().number()));
+                rf.setVal(SCHEMA_RID_ID, new IntegerConstant(recordIds.get(j).id()));
             }
 
         }
@@ -269,7 +284,8 @@ public class IVFIndex extends Index {
 
         // insert the data
         rf.insert();
-        rf.setVal(SCHEMA_VECTOR, key.get(0));
+        if (iscluser_1)
+            rf.setVal(SCHEMA_VECTOR, key.get(0));
         rf.setVal(SCHEMA_RID_BLOCK, new BigIntConstant(dataRecordId.block()
                 .number()));
         rf.setVal(SCHEMA_RID_ID, new IntegerConstant(dataRecordId.id()));
