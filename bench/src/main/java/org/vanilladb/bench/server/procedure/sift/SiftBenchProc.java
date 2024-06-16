@@ -33,8 +33,6 @@ class Pair implements Comparable<Pair> {
 
 public class SiftBenchProc extends StoredProcedure<SiftBenchParamHelper> {
 
-    private static final int top_K_cluster = 20;
-
     public SiftBenchProc() {
         super(new SiftBenchParamHelper());
     }
@@ -67,7 +65,7 @@ public class SiftBenchProc extends StoredProcedure<SiftBenchParamHelper> {
 
         if (count == 0)
             throw new RuntimeException("Nearest neighbor query execution failed for " + query.toString());
-        System.out.println("Nearest neighbor query returned " + count + " results");
+        // System.out.println("Nearest neighbor query returned " + count + " results");
         if (count < 20) {
             throw new RuntimeException("Nearest neighbor query returned less than " + paramHelper.getK()
                     + " results, only " + count + " results returned");
