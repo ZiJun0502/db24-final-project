@@ -53,12 +53,13 @@ import java.util.Vector;
 
 public class StoredProcedureUtils {
 	public static List<VectorConstant> extractVectors(List<DataRecord> records) {
-        List<VectorConstant> vectors = new ArrayList<>();
-        for (DataRecord record : records) {
-            vectors.add((VectorConstant)record.i_emb);
-        }
-        return vectors;
+		List<VectorConstant> vectors = new ArrayList<>();
+		for (DataRecord record : records) {
+			vectors.add((VectorConstant) record.i_emb);
+		}
+		return vectors;
 	}
+
 	public static void executeTrainIndex(String tableName, List<String> idxFields, String idxName, Transaction tx,
 			int num_items, int dim) {
 		// read data from table
@@ -87,11 +88,13 @@ public class StoredProcedureUtils {
 		System.out.println("Start training kmeans");
 		List<List<DataRecord>> clusters = km.fit(data);
 		int sizeSum = 0;
-		for(List<DataRecord> cluster: clusters) {
+		for (List<DataRecord> cluster : clusters) {
 			sizeSum += cluster.size();
+			if (cluster.size() == 0) {
+				System.out.println("Cluster size 0");
+			}
 		}
-		System.out.print("Cluster avg size: " + (sizeSum / clusters.size()));
-		System.out.println();
+		System.out.println("Cluster avg size: " + (sizeSum / clusters.size()));
 		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
 		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
 		System.out.println("Setting index cluster table");

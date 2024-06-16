@@ -79,6 +79,7 @@ public class IVFIndex extends Index {
 
     // store key and record id
     private int clusterID;
+    private List<Integer> clusterIDs;
     private SearchKey searchKey;
     private RecordFile rf;
     private boolean isBeforeFirsted;
@@ -113,42 +114,49 @@ public class IVFIndex extends Index {
         // Arrays.toString(vec.asJavaVal()));
         return vec;
     }
+
     public class Pair<K, V> {
         private K key;
         public V value;
+
         public Pair(K key, V value) {
             this.key = key;
             this.value = value;
         }
-        public K getKey() {return key;}
+
+        public K getKey() {
+            return key;
+        }
     }
+
     private List<Integer> searchKClosestCluster(int k, VectorConstant vec) {
         // System.out.println("searchClosestCluster: " + centroidTblname);
         List<Integer> kClosestClusters = new ArrayList<>();
         this.distFn_vec.setQueryVector(vec);
-        PriorityQueue<Pair<Double, Integer>> minHeap = new PriorityQueue<>(k, Comparator.comparingDouble(Pair::getKey));
-        for(int i = 0 ; i < k ; i++) {
-            TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
-            // open centroid file
-            this.rf = ti.open(tx, false);
-            rf.beforeFirst();
-            while (rf.next()) {
-                Constant cid = rf.getVal(SCHEMA_CID);
-                Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
-                double distance = distFn_vec.distance((VectorConstant) centroid_vec);
-                if (minHeap.size() < k) {
-                    minHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
-                } else if (distance < minHeap.peek().getKey()) {
-                    minHeap.poll();
-                    minHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
-                }
+        PriorityQueue<Pair<Double, Integer>> maxHeap = new PriorityQueue<>(k,
+                Comparator.comparingDouble(Pair<Double, Integer>::getKey).reversed());
+        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+        // open centroid file
+        this.rf = ti.open(tx, false);
+        rf.beforeFirst();
+        while (rf.next()) {
+            Constant cid = rf.getVal(SCHEMA_CID);
+            Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
+            double distance = distFn_vec.distance((VectorConstant) centroid_vec);
+            if (maxHeap.size() < k) {
+                maxHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
+            } else if (distance < maxHeap.peek().getKey()) {
+                maxHeap.poll();
+                maxHeap.add(new Pair<>(distance, (int) cid.asJavaVal()));
             }
         }
-        while (!minHeap.isEmpty()) {
-            kClosestClusters.add(minHeap.poll().value);
+        rf.close();
+        while (!maxHeap.isEmpty()) {
+            kClosestClusters.add(maxHeap.poll().value);
         }
         return kClosestClusters;
     }
+
     private int searchClosestCluster(VectorConstant vec) {
         // System.out.println("searchClosestCluster: " + centroidTblname);
         double minDistance = Double.MAX_VALUE;
@@ -179,14 +187,18 @@ public class IVFIndex extends Index {
 
         this.searchKey = searchRange.asSearchKey();
         VectorConstant queryVec = extractVector(searchKey);
-        this.clusterID = searchClosestCluster(queryVec);
-        String tblname = this.clusterTblnamePrefix + this.clusterID;
+
+        this.clusterIDs = searchKClosestCluster(5, queryVec);
+        this.clusterID = 0;
+        String tblname = this.clusterTblnamePrefix + this.clusterIDs.get(clusterID);
         TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
-        // System.out.println("Opening cluster file: " + tblname + ".tbl");
-        // the underlying record file should not perform logging
         this.rf = ti.open(tx, false);
 
-        // initialize the file header if needed
+        // this.clusterID = searchClosestCluster(queryVec);
+        // String tblname = this.clusterTblnamePrefix + this.clusterID;
+        // TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
+        // this.rf = ti.open(tx, false);
+
         if (rf.fileSize() == 0)
             RecordFile.formatFileHeader(ti.fileName(), tx);
         rf.beforeFirst();
@@ -202,6 +214,21 @@ public class IVFIndex extends Index {
 
         while (rf.next())
             return true;
+        rf.close();
+
+        if (clusterID < clusterIDs.size() - 1) {
+            clusterID++;
+            String tblname = this.clusterTblnamePrefix + this.clusterIDs.get(clusterID);
+            TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
+            this.rf = ti.open(tx, false);
+            if (rf.fileSize() == 0)
+                RecordFile.formatFileHeader(ti.fileName(), tx);
+            rf.beforeFirst();
+
+            if (rf.next()) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -212,20 +239,27 @@ public class IVFIndex extends Index {
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
 
-
-	public void setClusterTable(List<List<DataRecord>> cluster) {
-        // centroid file 
+    public void setClusterTable(List<List<DataRecord>> cluster) {
+        // centroid file
         TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
         RecordFile centroidFile = ti.open(tx, true);
         RecordFile.formatFileHeader(ti.fileName(), tx);
         for (int i = 0; i < NUM_CLUSTERS; i++) {
+            if (cluster.get(i).size() == 0) {
+                System.out.println("Cluster " + i + " is empty");
+                continue;
+            }
             VectorConstant vector = (VectorConstant) cluster.get(i).get(0).i_emb;
             centroidFile.insert();
             centroidFile.setVal(SCHEMA_CID, new IntegerConstant(i));
             centroidFile.setVal(SCHEMA_VECTOR, vector);
         }
-        // cluster file 
+        // cluster file
         for (int i = 0; i < NUM_CLUSTERS; ++i) {
+            if (cluster.get(i).size() == 0) {
+                System.out.println("Cluster " + i + " is empty");
+                continue;
+            }
             System.out.println("Setting table for cluster_" + i + " with size: " + cluster.get(i).size());
             String tblname = clusterTblnamePrefix + i;
             TableInfo cluster_ti = new TableInfo(tblname, schema_cluster(keyType));
@@ -244,9 +278,11 @@ public class IVFIndex extends Index {
         }
         tableSet = true;
     }
+
     @Override
     public void insert(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
-        if(!tableSet) return;
+        if (!tableSet)
+            return;
         // search the position
         beforeFirst(new SearchRange(key));
 
@@ -269,7 +305,8 @@ public class IVFIndex extends Index {
 
     @Override
     public void delete(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
-        if(!tableSet) return;
+        if (!tableSet)
+            return;
         // search the position
         beforeFirst(new SearchRange(key));
 
