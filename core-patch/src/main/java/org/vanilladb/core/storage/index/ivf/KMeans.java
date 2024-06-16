@@ -48,7 +48,8 @@ public class KMeans {
         Random random = new Random();
         for (int i = 0; i < k; i++) {
             centroids.add(data.get(random.nextInt(data.size())));
-            // System.out.println("Choose centroid: " + data.get(random.nextInt(data.size())));
+            // System.out.println("Choose centroid: " +
+            // data.get(random.nextInt(data.size())));
         }
         return centroids;
     }
@@ -62,7 +63,8 @@ public class KMeans {
         for (DataRecord record : data) {
             VectorConstant embedding = (VectorConstant) record.i_emb;
             int closestCentroidIndex = getClosestCentroid(embedding, centroids);
-            // System.out.println("Record " + record.i_id + " is closest to " + closestCentroidIndex);
+            // System.out.println("Record " + record.i_id + " is closest to " +
+            // closestCentroidIndex);
             clusters.get(closestCentroidIndex).add(record);
         }
 
@@ -110,7 +112,7 @@ public class KMeans {
         }
         for (int i = 0; i < centroid.length; i++) {
             // System.out.println("Cluster Size: " + cluster.size());
-            if(cluster.size() != 0) {
+            if (cluster.size() != 0) {
                 centroid[i] /= cluster.size();
             }
         }

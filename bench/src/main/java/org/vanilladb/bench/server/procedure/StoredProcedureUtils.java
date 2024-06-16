@@ -84,7 +84,7 @@ public class StoredProcedureUtils {
 		System.out.println("Table read finished");
 
 		// kmeans
-		KMeans km = new KMeans(200, 100, distFn);
+		KMeans km = new KMeans(300, 20, distFn);
 		System.out.println("Start training kmeans");
 		List<List<DataRecord>> clusters = km.fit(data);
 		int sizeSum = 0;
