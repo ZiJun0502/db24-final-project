@@ -8,6 +8,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import javax.xml.crypto.Data;
+
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.BigIntConstant;
 import org.vanilladb.core.sql.IntegerConstant;
@@ -39,7 +41,7 @@ public class IVFIndex extends Index {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
         data = new ArrayList<>();
     }
-    public int getNumClusters(){
+    public static int getNumClusters(){
         return NUM_CLUSTERS;
     }
 
@@ -241,17 +243,18 @@ public class IVFIndex extends Index {
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
 
-    public void setClusterTable(List<List<DataRecord>> cluster) {
-        // centroid file
+    public void setClusterTable(List<List<DataRecord>> parentCluster, 
+        List<List<List<DataRecord>>> childClusters) {
+        // parent centroid file
         TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
         RecordFile centroidFile = ti.open(tx, true);
         RecordFile.formatFileHeader(ti.fileName(), tx);
-        for (int i = 0; i < NUM_CLUSTERS; i++) {
-            if (cluster.get(i).size() == 0) {
+        for (int i = 0; i < 10 ; i++) {
+            if (parentCluster.get(i).size() == 0) {
                 System.out.println("Cluster " + i + " is empty");
                 continue;
             }
-            VectorConstant vector = (VectorConstant) cluster.get(i).get(0).i_emb;
+            VectorConstant vector = (VectorConstant) parentCluster.get(i).get(0).i_emb;
             centroidFile.insert();
             centroidFile.setVal(SCHEMA_CID, new IntegerConstant(i));
             centroidFile.setVal(SCHEMA_VECTOR, vector);

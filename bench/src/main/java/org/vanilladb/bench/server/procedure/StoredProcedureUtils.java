@@ -63,43 +63,36 @@ public class StoredProcedureUtils {
 	public static void executeTrainIndex(String tableName, List<String> idxFields, String idxName, Transaction tx,
 			int num_items, int dim) {
 		// read data from table
-		// Plan p = new TablePlan(tableName, tx);
 		System.out.println("Train index for: " + tableName);
 
 		DistanceFn distFn = new EuclideanFn("i_emb");
-		// TableScan s = (TableScan) p.open();
-		// s.beforeFirst();
-		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
-		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
+
 		List<DataRecord> data = IVFIndex.data;
 		System.out.println("Data Size: " + data.size());
-		// System.out.println("Reading data from table: " + tableName);
-		// while (s.next()) {
-		// 	Constant vec = s.getVal("i_emb");
-		// 	// Constant iid = s.getVal("i_id");
-
-		// 	RecordId rid = s.getRecordId();
-		// 	Constant blk = new BigIntConstant(rid.block().number());
-		// 	Constant id = new IntegerConstant(rid.id());
-		// 	data.add(new DataRecord(vec, blk, id));
-		// }
-		// s.close();
-		// System.out.println("Table read finished");
-
 		// kmeans
-		KMeans km = new KMeans(ivf.getNumClusters(), 20, distFn);
-		System.out.println("Start training kmeans");
-		List<List<DataRecord>> clusters = km.fit(data);
-		int sizeSum = 0;
-		for (List<DataRecord> cluster : clusters) {
-			sizeSum += cluster.size();
-			if (cluster.size() == 0) {
-				System.out.println("Cluster size 0");
-			}
+		int level1Size = 10;
+		KMeans km = new KMeans(level1Size, 20, distFn);
+		System.out.println("Start training kmeans, level: 1");
+		List<List<DataRecord>> parentClusters = km.fit(data);
+
+		km = new KMeans(IVFIndex.getNumClusters(), 20, distFn);
+		List<List<List<DataRecord>>> childClusters;
+		System.out.println("Start training kmeans, level: 2");
+		for(int i = 0 ; i < 10 ; i++) {
+			List<List<DataRecord>> clusters = km.fit(parentClusters.get(i));
+			childClusters.add(clusters);
 		}
-		System.out.println("Cluster avg size: " + (sizeSum / clusters.size()));
+		int sizeSum = 0;
+		for (List<DataRecord> cluster : parentClusters) {
+			sizeSum += cluster.size();
+		}
+		System.out.println("Cluster avg size: " + (sizeSum / parentClusters.size()));
 		System.out.println("Setting index cluster table");
-		ivf.setClusterTable(clusters);
+		
+		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
+		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
+
+		ivf.setClusterTable(parentClusters, childClusters);
 		ivf.preLoadToMemory();
 		IVFIndex.data.clear();
 	}
