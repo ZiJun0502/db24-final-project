@@ -1,13 +1,13 @@
 package org.vanilladb.core.sql.distfn;
 
+import java.util.Vector;
+
 import org.vanilladb.core.sql.VectorConstant;
 import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorMask;
-import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import jdk.incubator.vector.VectorOperators;
 
 public class EuclideanFn extends DistanceFn {
-    private static final VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
 
     public EuclideanFn(String fld) {
         super(fld);
@@ -15,16 +15,30 @@ public class EuclideanFn extends DistanceFn {
 
     @Override
     protected double calculateDistance(VectorConstant vec) {
+        // double sum = 0;
+        // for (int i = 0; i < vec.dimension(); i++) {
+        // double diff = query.get(i) - vec.get(i);
+        // sum += diff * diff;
+        // }
+
+        // SIMD
+        VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
+        int i = 0;
         double sum = 0;
-        float[] query = this.query.asJavaVal();
-        float[] vector = vec.asJavaVal();
-        for (int i = 0; i < query.length; i += SPECIES.length()) {
-            VectorMask<Float> m = SPECIES.indexInRange(i, query.length);
-            FloatVector a = FloatVector.fromArray(SPECIES, query, i, m);
-            FloatVector b = FloatVector.fromArray(SPECIES, vector, i, m);
-            FloatVector diff = a.sub(b);
-            diff = diff.mul(diff);
-            sum += diff.reduceLanes(VectorOperators.ADD);
+        float[] queryArr = query.asJavaVal();
+        float[] vecArr = vec.asJavaVal();
+
+        for (; i <= vec.dimension() - SPECIES.length(); i += SPECIES.length()) {
+            FloatVector queryVec = FloatVector.fromArray(SPECIES, queryArr, i);
+            FloatVector vecVec = FloatVector.fromArray(SPECIES, vecArr, i);
+            FloatVector diff = queryVec.sub(vecVec);
+            FloatVector diffSq = diff.mul(diff);
+            sum += diffSq.reduceLanes(VectorOperators.ADD);
+        }
+
+        for (; i < vec.dimension(); i++) {
+            float diff = queryArr[i] - vecArr[i];
+            sum += diff * diff;
         }
 
         return Math.sqrt(sum);
