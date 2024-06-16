@@ -8,6 +8,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import javax.xml.crypto.Data;
+
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.BigIntConstant;
 import org.vanilladb.core.sql.IntegerConstant;
@@ -39,17 +41,11 @@ public class IVFIndex extends Index {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
         data = new ArrayList<>();
     }
-    public int getNumClusters(){
+    public static int getNumClusters(){
         return NUM_CLUSTERS;
     }
 
-    // private static String vecFieldName(int index) {
-    // return SCHEMA_VECTOR_PREFIX + index;
-    // }
     public static long searchCost(SearchKeyType keyType, long totRecs, long matchRecs) {
-        // copied from HashIndex.java
-        // int rpb = Buffer.BUFFER_SIZE / RecordPage.slotSize(schema(keyType));
-        // return (totRecs / rpb) / NUM_CLUSTERS;
         return 0;
     }
 
@@ -112,8 +108,6 @@ public class IVFIndex extends Index {
 
     private VectorConstant extractVector(SearchKey key) {
         VectorConstant vec = (VectorConstant) key.get(0);
-        // System.out.println("IVFIndex extractVector: " +
-        // Arrays.toString(vec.asJavaVal()));
         return vec;
     }
 
@@ -132,7 +126,6 @@ public class IVFIndex extends Index {
     }
 
     private List<Integer> searchKClosestCluster(int k, VectorConstant vec) {
-        // System.out.println("searchClosestCluster: " + centroidTblname);
         List<Integer> kClosestClusters = new ArrayList<>();
         this.distFn_vec.setQueryVector(vec);
         PriorityQueue<Pair<Double, Integer>> maxHeap = new PriorityQueue<>(k,
@@ -157,27 +150,6 @@ public class IVFIndex extends Index {
             kClosestClusters.add(maxHeap.poll().value);
         }
         return kClosestClusters;
-    }
-
-    private int searchClosestCluster(VectorConstant vec) {
-        // System.out.println("searchClosestCluster: " + centroidTblname);
-        double minDistance = Double.MAX_VALUE;
-        this.distFn_vec.setQueryVector(vec);
-        int closestClusterIndex = -1;
-        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
-        // open centroid file
-        this.rf = ti.open(tx, false);
-        rf.beforeFirst();
-        while (rf.next()) {
-            Constant cid = rf.getVal(SCHEMA_CID);
-            Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
-            double distance = distFn_vec.distance((VectorConstant) centroid_vec);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestClusterIndex = (int) cid.asJavaVal();
-            }
-        }
-        return closestClusterIndex;
     }
 
     @Override
@@ -241,7 +213,7 @@ public class IVFIndex extends Index {
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
 
-    public void setClusterTable(List<List<DataRecord>> cluster) {
+    public void setClusterTable(List<DataRecord> centroids, List<List<DataRecord>> cluster) {
         // centroid file
         TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
         RecordFile centroidFile = ti.open(tx, true);
@@ -251,7 +223,7 @@ public class IVFIndex extends Index {
                 System.out.println("Cluster " + i + " is empty");
                 continue;
             }
-            VectorConstant vector = (VectorConstant) cluster.get(i).get(0).i_emb;
+            VectorConstant vector = (VectorConstant) centroids.get(i).i_emb;
             centroidFile.insert();
             centroidFile.setVal(SCHEMA_CID, new IntegerConstant(i));
             centroidFile.setVal(SCHEMA_VECTOR, vector);

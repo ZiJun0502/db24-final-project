@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import javax.xml.crypto.Data;
+
 import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.VectorConstant;
 
@@ -12,6 +14,7 @@ public class KMeans {
     private final int k;
     private final int maxIterations;
     private final DistanceFn distFn_vec;
+    public List<DataRecord> centroids;
 
     public KMeans(int k, int maxIterations, DistanceFn distFn_vec) {
         this.k = k;
@@ -20,12 +23,8 @@ public class KMeans {
     }
 
     public List<List<DataRecord>> fit(List<DataRecord> data) {
-        List<VectorConstant> embeddings = new ArrayList<>();
-        for (DataRecord record : data) {
-            embeddings.add((VectorConstant) record.i_emb);
-        }
 
-        List<VectorConstant> centroids = initializeCentroids(embeddings);
+        centroids = initializeCentroids(data);
         List<List<DataRecord>> clusters = null;
 
         for (int iteration = 0; iteration < maxIterations; iteration++) {
@@ -37,14 +36,16 @@ public class KMeans {
                 break;
             }
 
-            centroids = newCentroids;
+            for (int i = 0 ; i < centroids.size() ; i++) {
+                centroids.get(i).i_emb = newCentroids.get(i);
+            }
         }
 
         return clusters;
     }
 
-    private List<VectorConstant> initializeCentroids(List<VectorConstant> data) {
-        List<VectorConstant> centroids = new ArrayList<>();
+    private List<DataRecord> initializeCentroids(List<DataRecord> data) {
+        List<DataRecord> centroids = new ArrayList<>();
         Random random = new Random();
         for (int i = 0; i < k; i++) {
             centroids.add(data.get(random.nextInt(data.size())));
@@ -54,7 +55,7 @@ public class KMeans {
         return centroids;
     }
 
-    private List<List<DataRecord>> assignClusters(List<DataRecord> data, List<VectorConstant> centroids) {
+    private List<List<DataRecord>> assignClusters(List<DataRecord> data, List<DataRecord> centroids) {
         List<List<DataRecord>> clusters = new ArrayList<>();
         for (int i = 0; i < k; i++) {
             clusters.add(new ArrayList<>());
@@ -71,12 +72,12 @@ public class KMeans {
         return clusters;
     }
 
-    private int getClosestCentroid(VectorConstant point, List<VectorConstant> centroids) {
+    private int getClosestCentroid(VectorConstant point, List<DataRecord> centroids) {
         double minDistance = Double.MAX_VALUE;
         int closestCentroidIndex = -1;
 
         for (int i = 0; i < centroids.size(); i++) {
-            distFn_vec.setQueryVector(centroids.get(i));
+            distFn_vec.setQueryVector((VectorConstant) centroids.get(i).i_emb);
             double distance = distFn_vec.distance(point);
             // System.out.println("Vec_a: " + centroids.get(i));
             // System.out.println("Vec_b: " + point);
@@ -119,11 +120,11 @@ public class KMeans {
         return new VectorConstant(centroid);
     }
 
-    private boolean converged(List<VectorConstant> oldCentroids, List<VectorConstant> newCentroids) {
+    private boolean converged(List<DataRecord> oldCentroids, List<VectorConstant> newCentroids) {
         double distanceSum = 0;
         boolean isConverged = true;
         for (int i = 0; i < oldCentroids.size(); i++) {
-            distFn_vec.setQueryVector(oldCentroids.get(i));
+            distFn_vec.setQueryVector((VectorConstant) oldCentroids.get(i).i_emb);
             double distance = distFn_vec.distance(newCentroids.get(i));
             distanceSum += distance;
             if (distance > 1e-4) {

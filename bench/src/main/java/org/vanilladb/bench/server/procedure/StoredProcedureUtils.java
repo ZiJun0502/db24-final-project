@@ -17,28 +17,21 @@ package org.vanilladb.bench.server.procedure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.Set;
 
 import static org.vanilladb.core.sql.RecordComparator.DIR_DESC;
 
 import org.vanilladb.core.query.algebra.Plan;
 import org.vanilladb.core.query.algebra.Scan;
-import org.vanilladb.core.query.algebra.TableScan;
 import org.vanilladb.core.query.algebra.TablePlan;
 import org.vanilladb.core.query.parse.InsertData;
 import org.vanilladb.core.server.VanillaDb;
-import org.vanilladb.core.sql.BigIntConstant;
-import org.vanilladb.core.sql.IntegerConstant;
 import org.vanilladb.core.sql.Constant;
-import org.vanilladb.core.sql.IntegerConstant;
 import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.Record;
 import org.vanilladb.core.sql.RecordComparator;
-import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.distfn.EuclideanFn;
 import org.vanilladb.core.storage.tx.Transaction;
@@ -46,10 +39,6 @@ import org.vanilladb.core.storage.index.ivf.IVFIndex;
 import org.vanilladb.core.storage.index.ivf.KMeans;
 import org.vanilladb.core.storage.index.ivf.DataRecord;
 import org.vanilladb.core.storage.metadata.index.IndexInfo;
-import org.vanilladb.core.storage.record.RecordId;
-
-import java.util.SortedSet;
-import java.util.Vector;
 
 public class StoredProcedureUtils {
 	public static List<VectorConstant> extractVectors(List<DataRecord> records) {
@@ -62,32 +51,13 @@ public class StoredProcedureUtils {
 
 	public static void executeTrainIndex(String tableName, List<String> idxFields, String idxName, Transaction tx,
 			int num_items, int dim) {
-		// read data from table
-		// Plan p = new TablePlan(tableName, tx);
 		System.out.println("Train index for: " + tableName);
-
 		DistanceFn distFn = new EuclideanFn("i_emb");
-		// TableScan s = (TableScan) p.open();
-		// s.beforeFirst();
-		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
-		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
 		List<DataRecord> data = IVFIndex.data;
 		System.out.println("Data Size: " + data.size());
-		// System.out.println("Reading data from table: " + tableName);
-		// while (s.next()) {
-		// 	Constant vec = s.getVal("i_emb");
-		// 	// Constant iid = s.getVal("i_id");
-
-		// 	RecordId rid = s.getRecordId();
-		// 	Constant blk = new BigIntConstant(rid.block().number());
-		// 	Constant id = new IntegerConstant(rid.id());
-		// 	data.add(new DataRecord(vec, blk, id));
-		// }
-		// s.close();
-		// System.out.println("Table read finished");
 
 		// kmeans
-		KMeans km = new KMeans(ivf.getNumClusters(), 20, distFn);
+		KMeans km = new KMeans(IVFIndex.getNumClusters(), 20, distFn);
 		System.out.println("Start training kmeans");
 		List<List<DataRecord>> clusters = km.fit(data);
 		int sizeSum = 0;
@@ -99,7 +69,10 @@ public class StoredProcedureUtils {
 		}
 		System.out.println("Cluster avg size: " + (sizeSum / clusters.size()));
 		System.out.println("Setting index cluster table");
-		ivf.setClusterTable(clusters);
+
+		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
+		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
+		ivf.setClusterTable(km.centroids, clusters);
 		ivf.preLoadToMemory();
 		IVFIndex.data.clear();
 	}
