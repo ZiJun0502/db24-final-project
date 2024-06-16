@@ -77,7 +77,9 @@ public class IVFIndex extends Index {
 
     // store key and record id
     private int clusterID;
+    private int clusterLevel1;
     private List<Integer> clusterIDs;
+    private List<Integer> clusterLevel2;
     private SearchKey searchKey;
     private RecordFile rf;
     private boolean isBeforeFirsted;
@@ -90,20 +92,30 @@ public class IVFIndex extends Index {
         super(ii, keyType, tx);
         this.distFn_vec = new EuclideanFn("i_emb");
         centroidTblname = "cluster_center";
-        clusterTblnamePrefix = "cluster_";
+        clusterTblnamePrefix = "cluster";
     }
 
     @Override
     public void preLoadToMemory() {
         // for (int i = 0; i < numClusters; i++) {
-        // String tblname = ii.indexName() + i + ".tbl";
-        long size = fileSize(centroidTblname);
+        String tblname = centroidTblname + ".tbl";
+
+        long size = fileSize(tblname);
+        System.out.println("Pre-load "+tblname+" to memory with size: " + size);
         BlockId blk;
         for (int j = 0; j < size; j++) {
-            blk = new BlockId(centroidTblname, j);
+            blk = new BlockId(tblname, j);
             tx.bufferMgr().pin(blk);
         }
-        // }
+        for (int i = 0 ; i < 10 ; i++) {
+            String tblnameLevel2 = centroidTblname + "_" + i + ".tbl";
+            System.out.println("Pre-load "+tblnameLevel2+" to memory with size: " + size);
+            size = fileSize(tblnameLevel2);
+            for (int j = 0; j < size; j++) {
+                blk = new BlockId(tblnameLevel2, j);
+                tx.bufferMgr().pin(blk);
+            }
+        }
     }
 
     private VectorConstant extractVector(SearchKey key) {
@@ -125,12 +137,12 @@ public class IVFIndex extends Index {
         }
     }
 
-    private List<Integer> searchKClosestCluster(int k, VectorConstant vec) {
+    private List<Integer> searchKClosestCluster(int k, VectorConstant vec, String filenamePosfix) {
         List<Integer> kClosestClusters = new ArrayList<>();
         this.distFn_vec.setQueryVector(vec);
         PriorityQueue<Pair<Double, Integer>> maxHeap = new PriorityQueue<>(k,
                 Comparator.comparingDouble(Pair<Double, Integer>::getKey).reversed());
-        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+        TableInfo ti = new TableInfo(centroidTblname + filenamePosfix, schema_centroid(keyType));
         // open centroid file
         this.rf = ti.open(tx, false);
         rf.beforeFirst();
@@ -151,6 +163,37 @@ public class IVFIndex extends Index {
         }
         return kClosestClusters;
     }
+    private int searchClosestCluster(VectorConstant vec, String filenamePosfix) {
+        // System.out.println("searchClosestCluster: " + centroidTblname);
+        double minDistance = Double.MAX_VALUE;
+        this.distFn_vec.setQueryVector(vec);
+        int closestClusterIndex = -1;
+        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+        // System.out.println("LEVEL1 Search table: " + centroidTblname);
+        // open centroid file
+        this.rf = ti.open(tx, false);
+        rf.beforeFirst();
+        while (rf.next()) {
+            Constant cid = rf.getVal(SCHEMA_CID);
+            Constant centroid_vec = rf.getVal(SCHEMA_VECTOR);
+            double distance = distFn_vec.distance((VectorConstant) centroid_vec);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestClusterIndex = (int) cid.asJavaVal();
+            }
+        }
+        return closestClusterIndex;
+    }
+    private void searchKClosestCluster(int k, VectorConstant vec) {
+        int cLevel1 = searchClosestCluster(vec, "");
+        // System.out.println("Closest level1 centroid: " + cLevel1);
+        List<Integer> cLevel2 = searchKClosestCluster(k, vec, "_" + cLevel1);
+        // for (int i : cLevel2) {
+            // System.out.println("    Closest level2 centroids: " + i);
+        // }
+        this.clusterLevel1 = cLevel1;
+        this.clusterLevel2 = cLevel2;
+    }
 
     @Override
     public void beforeFirst(SearchRange searchRange) {
@@ -162,9 +205,11 @@ public class IVFIndex extends Index {
         this.searchKey = searchRange.asSearchKey();
         VectorConstant queryVec = extractVector(searchKey);
 
-        this.clusterIDs = searchKClosestCluster(2, queryVec);
+        searchKClosestCluster(2, queryVec);
         this.clusterID = 0;
-        String tblname = this.clusterTblnamePrefix + this.clusterIDs.get(clusterID);
+        String tblname = this.clusterTblnamePrefix 
+                    + "_" + this.clusterLevel1 
+                    + "_" + this.clusterLevel2.get(clusterID);
         TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
         this.rf = ti.open(tx, false);
 
@@ -190,9 +235,11 @@ public class IVFIndex extends Index {
             return true;
         rf.close();
 
-        if (clusterID < clusterIDs.size() - 1) {
+        if (clusterID < this.clusterLevel2.size() - 1) {
             clusterID++;
-            String tblname = this.clusterTblnamePrefix + this.clusterIDs.get(clusterID);
+            String tblname = this.clusterTblnamePrefix 
+                        + "_" + this.clusterLevel1 
+                        + "_" + this.clusterLevel2.get(clusterID);
             TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
             this.rf = ti.open(tx, false);
             if (rf.fileSize() == 0)
@@ -212,15 +259,15 @@ public class IVFIndex extends Index {
         int id = (Integer) rf.getVal(SCHEMA_RID_ID).asJavaVal();
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
-
-    public void setClusterTable(List<DataRecord> centroids, List<List<DataRecord>> cluster) {
+    public void setClusterTable(List<DataRecord> centroids, List<List<DataRecord>> cluster, String filenamePosfix) {
         // centroid file
-        TableInfo ti = new TableInfo(centroidTblname, schema_centroid(keyType));
+
+        TableInfo ti = new TableInfo(centroidTblname + filenamePosfix, schema_centroid(keyType));
         RecordFile centroidFile = ti.open(tx, true);
         RecordFile.formatFileHeader(ti.fileName(), tx);
-        for (int i = 0; i < NUM_CLUSTERS; i++) {
+        for (int i = 0; i < centroids.size(); i++) {
             if (cluster.get(i).size() == 0) {
-                System.out.println("Cluster " + i + " is empty");
+                System.out.println("Cluster_center_" + i + " is empty");
                 continue;
             }
             VectorConstant vector = (VectorConstant) centroids.get(i).i_emb;
@@ -228,14 +275,17 @@ public class IVFIndex extends Index {
             centroidFile.setVal(SCHEMA_CID, new IntegerConstant(i));
             centroidFile.setVal(SCHEMA_VECTOR, vector);
         }
+        centroidFile.close();
         // cluster file
-        for (int i = 0; i < NUM_CLUSTERS; ++i) {
+        // skip for level1
+        if(filenamePosfix == "") return;
+        for (int i = 0; i < cluster.size(); i++) {
             if (cluster.get(i).size() == 0) {
-                System.out.println("Cluster " + i + " is empty");
+                System.out.println("Cluster" + filenamePosfix + "_" + i + " is empty");
                 continue;
             }
-            System.out.println("Setting table for cluster_" + i + " with size: " + cluster.get(i).size());
-            String tblname = clusterTblnamePrefix + i;
+            String tblname = clusterTblnamePrefix + filenamePosfix + "_" + i;
+            // System.out.println("Setting table for " + tblname + " with size: " + cluster.get(i).size());
             TableInfo cluster_ti = new TableInfo(tblname, schema_cluster(keyType));
             RecordFile cluster_rf = cluster_ti.open(tx, true);
             if (cluster_rf.fileSize() == 0)
@@ -249,6 +299,16 @@ public class IVFIndex extends Index {
                 cluster_rf.setVal(SCHEMA_RID_BLOCK, rec.blockNum);
                 cluster_rf.setVal(SCHEMA_RID_ID, rec.recordId);
             }
+            cluster_rf.close();
+        }
+    }
+    public void setClusterTable(List<DataRecord> centroidLevel1, List<List<DataRecord>> clusterLevel1,
+        // level1
+        List<List<DataRecord>> centroidLevel2, List<List<List<DataRecord>>> clusterLevel2) {
+        setClusterTable(centroidLevel1, clusterLevel1, "");
+        // level2
+        for(int i = 0 ; i < centroidLevel1.size() ; i++) {
+            setClusterTable(centroidLevel2.get(i), clusterLevel2.get(i), "_"+i);
         }
         tableSet = true;
     }

@@ -56,23 +56,35 @@ public class StoredProcedureUtils {
 		List<DataRecord> data = IVFIndex.data;
 		System.out.println("Data Size: " + data.size());
 
-		// kmeans
-		KMeans km = new KMeans(IVFIndex.getNumClusters(), 20, distFn);
-		System.out.println("Start training kmeans");
-		List<List<DataRecord>> clusters = km.fit(data);
-		int sizeSum = 0;
-		for (List<DataRecord> cluster : clusters) {
-			sizeSum += cluster.size();
-			if (cluster.size() == 0) {
-				System.out.println("Cluster size 0");
-			}
+		// level1 kmeans
+		KMeans km = new KMeans(10, 20, distFn);
+		System.out.println("Start training kmeans, level: 1");
+		List<List<DataRecord>> clusterLevel1 = km.fit(data);
+		List<DataRecord> centroidLevel1 = km.centroids;
+		// level2 kmeans
+		km = new KMeans(IVFIndex.getNumClusters(), 20, distFn);
+		System.out.println("Start training kmeans, level: 2");
+		// 10 adjacency list
+		List<List<List<DataRecord>>> clusterLevel2 = new ArrayList<>();
+		List<List<DataRecord>> centroidLevel2 = new ArrayList<>();
+		for(int i = 0 ; i < 10 ; i++) {
+			List<List<DataRecord>> cluster = km.fit(clusterLevel1.get(i));
+			List<DataRecord> centroid = km.centroids;
+
+			clusterLevel2.add(cluster);
+			centroidLevel2.add(centroid);
 		}
-		System.out.println("Cluster avg size: " + (sizeSum / clusters.size()));
 		System.out.println("Setting index cluster table");
 
 		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
 		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
-		ivf.setClusterTable(km.centroids, clusters);
+		System.out.println("Level1 Centroid Size: " + centroidLevel1.size());
+		for(int i = 0 ; i < 10 ; i++) {
+			System.out.println("Level1 cluster Size: " + clusterLevel1.get(i).size());
+			System.out.println("	Level2 Centroid Size: " + centroidLevel2.get(i).size());
+		}
+		ivf.setClusterTable(centroidLevel1, clusterLevel1, 
+			centroidLevel2, clusterLevel2);
 		ivf.preLoadToMemory();
 		IVFIndex.data.clear();
 	}
