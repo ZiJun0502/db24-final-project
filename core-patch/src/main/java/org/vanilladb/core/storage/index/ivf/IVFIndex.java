@@ -191,7 +191,7 @@ public class IVFIndex extends Index {
         this.searchKey = searchRange.asSearchKey();
         VectorConstant queryVec = extractVector(searchKey);
 
-        this.clusterIDs = searchKClosestCluster(5, queryVec);
+        this.clusterIDs = searchKClosestCluster(2, queryVec);
         this.clusterID = 0;
         String tblname = this.clusterTblnamePrefix + this.clusterIDs.get(clusterID);
         TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
