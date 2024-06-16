@@ -35,13 +35,16 @@ public class IVFIndex extends Index {
     private static final String SCHEMA_ID = "i_id", SCHEMA_CID = "c_id", SCHEMA_VECTOR = "i_emb",
             SCHEMA_RID_BLOCK = "block", SCHEMA_RID_ID = "id";
     private static final int NUM_CLUSTERS;
+    private static final int NUM_SEARCH;
     public static List<DataRecord> data;
 
     static {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
+        NUM_SEARCH = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_SEARCH", 2);
         data = new ArrayList<>();
     }
-    public static int getNumClusters(){
+
+    public static int getNumClusters() {
         return NUM_CLUSTERS;
     }
 
@@ -101,15 +104,15 @@ public class IVFIndex extends Index {
         String tblname = centroidTblname + ".tbl";
 
         long size = fileSize(tblname);
-        System.out.println("Pre-load "+tblname+" to memory with size: " + size);
+        System.out.println("Pre-load " + tblname + " to memory with size: " + size);
         BlockId blk;
         for (int j = 0; j < size; j++) {
             blk = new BlockId(tblname, j);
             tx.bufferMgr().pin(blk);
         }
-        for (int i = 0 ; i < 10 ; i++) {
+        for (int i = 0; i < 10; i++) {
             String tblnameLevel2 = centroidTblname + "_" + i + ".tbl";
-            System.out.println("Pre-load "+tblnameLevel2+" to memory with size: " + size);
+            System.out.println("Pre-load " + tblnameLevel2 + " to memory with size: " + size);
             size = fileSize(tblnameLevel2);
             for (int j = 0; j < size; j++) {
                 blk = new BlockId(tblnameLevel2, j);
@@ -163,6 +166,7 @@ public class IVFIndex extends Index {
         }
         return kClosestClusters;
     }
+
     private int searchClosestCluster(VectorConstant vec, String filenamePosfix) {
         // System.out.println("searchClosestCluster: " + centroidTblname);
         double minDistance = Double.MAX_VALUE;
@@ -184,12 +188,13 @@ public class IVFIndex extends Index {
         }
         return closestClusterIndex;
     }
+
     private void searchKClosestCluster(int k, VectorConstant vec) {
         int cLevel1 = searchClosestCluster(vec, "");
         // System.out.println("Closest level1 centroid: " + cLevel1);
         List<Integer> cLevel2 = searchKClosestCluster(k, vec, "_" + cLevel1);
         // for (int i : cLevel2) {
-            // System.out.println("    Closest level2 centroids: " + i);
+        // System.out.println(" Closest level2 centroids: " + i);
         // }
         this.clusterLevel1 = cLevel1;
         this.clusterLevel2 = cLevel2;
@@ -205,11 +210,11 @@ public class IVFIndex extends Index {
         this.searchKey = searchRange.asSearchKey();
         VectorConstant queryVec = extractVector(searchKey);
 
-        searchKClosestCluster(2, queryVec);
+        searchKClosestCluster(NUM_SEARCH, queryVec);
         this.clusterID = 0;
-        String tblname = this.clusterTblnamePrefix 
-                    + "_" + this.clusterLevel1 
-                    + "_" + this.clusterLevel2.get(clusterID);
+        String tblname = this.clusterTblnamePrefix
+                + "_" + this.clusterLevel1
+                + "_" + this.clusterLevel2.get(clusterID);
         TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
         this.rf = ti.open(tx, false);
 
@@ -237,9 +242,9 @@ public class IVFIndex extends Index {
 
         if (clusterID < this.clusterLevel2.size() - 1) {
             clusterID++;
-            String tblname = this.clusterTblnamePrefix 
-                        + "_" + this.clusterLevel1 
-                        + "_" + this.clusterLevel2.get(clusterID);
+            String tblname = this.clusterTblnamePrefix
+                    + "_" + this.clusterLevel1
+                    + "_" + this.clusterLevel2.get(clusterID);
             TableInfo ti = new TableInfo(tblname, schema_cluster(keyType));
             this.rf = ti.open(tx, false);
             if (rf.fileSize() == 0)
@@ -259,6 +264,7 @@ public class IVFIndex extends Index {
         int id = (Integer) rf.getVal(SCHEMA_RID_ID).asJavaVal();
         return new RecordId(new BlockId(dataFileName, blkNum), id);
     }
+
     public void setClusterTable(List<DataRecord> centroids, List<List<DataRecord>> cluster, String filenamePosfix) {
         // centroid file
 
@@ -266,7 +272,7 @@ public class IVFIndex extends Index {
         RecordFile centroidFile = ti.open(tx, true);
         RecordFile.formatFileHeader(ti.fileName(), tx);
         for (int i = 0; i < centroids.size(); i++) {
-            if (cluster.get(i).size() == 0) {
+            if (cluster.get(i).size() <= 10) {
                 System.out.println("Cluster_center_" + i + " is empty");
                 continue;
             }
@@ -278,14 +284,14 @@ public class IVFIndex extends Index {
         centroidFile.close();
         // cluster file
         // skip for level1
-        if(filenamePosfix == "") return;
+        if (filenamePosfix == "")
+            return;
         for (int i = 0; i < cluster.size(); i++) {
-            if (cluster.get(i).size() == 0) {
+            if (cluster.get(i).size() <= 10) {
                 System.out.println("Cluster" + filenamePosfix + "_" + i + " is empty");
                 continue;
             }
             String tblname = clusterTblnamePrefix + filenamePosfix + "_" + i;
-            // System.out.println("Setting table for " + tblname + " with size: " + cluster.get(i).size());
             TableInfo cluster_ti = new TableInfo(tblname, schema_cluster(keyType));
             RecordFile cluster_rf = cluster_ti.open(tx, true);
             if (cluster_rf.fileSize() == 0)
@@ -302,23 +308,24 @@ public class IVFIndex extends Index {
             cluster_rf.close();
         }
     }
+
     public void setClusterTable(List<DataRecord> centroidLevel1, List<List<DataRecord>> clusterLevel1,
-        // level1
-        List<List<DataRecord>> centroidLevel2, List<List<List<DataRecord>>> clusterLevel2) {
+            // level1
+            List<List<DataRecord>> centroidLevel2, List<List<List<DataRecord>>> clusterLevel2) {
         setClusterTable(centroidLevel1, clusterLevel1, "");
         // level2
-        for(int i = 0 ; i < centroidLevel1.size() ; i++) {
-            setClusterTable(centroidLevel2.get(i), clusterLevel2.get(i), "_"+i);
+        for (int i = 0; i < centroidLevel1.size(); i++) {
+            setClusterTable(centroidLevel2.get(i), clusterLevel2.get(i), "_" + i);
         }
         tableSet = true;
     }
 
     @Override
     public void insert(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
-        if (!tableSet){
-            DataRecord d = new DataRecord(key.get(0), 
-                new BigIntConstant(dataRecordId.block().number()), 
-                new IntegerConstant(dataRecordId.id()));
+        if (!tableSet) {
+            DataRecord d = new DataRecord(key.get(0),
+                    new BigIntConstant(dataRecordId.block().number()),
+                    new IntegerConstant(dataRecordId.id()));
             IVFIndex.data.add(d);
             return;
         }

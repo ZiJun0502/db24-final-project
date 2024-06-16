@@ -28,15 +28,15 @@ public class KMeans {
         List<List<DataRecord>> clusters = null;
 
         for (int iteration = 0; iteration < maxIterations; iteration++) {
-            System.out.print("Iteration: " + iteration);
+            System.out.println("Iteration: " + iteration);
             clusters = assignClusters(data, centroids);
             List<VectorConstant> newCentroids = computeNewCentroids(clusters);
 
-            if (converged(centroids, newCentroids)) {
-                break;
-            }
+            // if (converged(centroids, newCentroids)) {
+            // break;
+            // }
 
-            for (int i = 0 ; i < centroids.size() ; i++) {
+            for (int i = 0; i < centroids.size(); i++) {
                 centroids.get(i).i_emb = newCentroids.get(i);
             }
         }
