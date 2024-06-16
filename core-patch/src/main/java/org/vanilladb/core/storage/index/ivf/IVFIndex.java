@@ -40,6 +40,9 @@ public class IVFIndex extends Index {
     static {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
     }
+    public int getNumClusters(){
+        return NUM_CLUSTERS;
+    }
 
     // private static String vecFieldName(int index) {
     // return SCHEMA_VECTOR_PREFIX + index;

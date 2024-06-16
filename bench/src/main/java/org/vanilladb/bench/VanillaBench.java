@@ -110,10 +110,10 @@ public class VanillaBench {
 			// notify RTEs for recording statistics
 			for (int i = 0; i < emulators.length; i++)
 				emulators[i].startRecordStatistic();
-			logger.info("testtest");
+			// logger.info("testtest");
 			// waiting
 			Thread.sleep(VanillaBenchParameters.BENCHMARK_INTERVAL);
-			logger.info("testtesttttt");
+			// logger.info("testtesttttt");
 
 			if (logger.isLoggable(Level.INFO))
 				logger.info("benchmark period finished. Stopping RTEs...");

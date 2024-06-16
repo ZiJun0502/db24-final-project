@@ -83,8 +83,10 @@ public class StoredProcedureUtils {
 		s.close();
 		System.out.println("Table read finished");
 
+		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
+		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
 		// kmeans
-		KMeans km = new KMeans(200, 100, distFn);
+		KMeans km = new KMeans(ivf.getNumClusters(), 100, distFn);
 		System.out.println("Start training kmeans");
 		List<List<DataRecord>> clusters = km.fit(data);
 		int sizeSum = 0;
@@ -95,8 +97,6 @@ public class StoredProcedureUtils {
 			}
 		}
 		System.out.println("Cluster avg size: " + (sizeSum / clusters.size()));
-		List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tableName, idxFields.get(0), tx);
-		IVFIndex ivf = (IVFIndex) iis.get(0).open(tx);
 		System.out.println("Setting index cluster table");
 		ivf.setClusterTable(clusters);
 	}
