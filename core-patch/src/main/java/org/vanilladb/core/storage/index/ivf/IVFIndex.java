@@ -1,9 +1,7 @@
 package org.vanilladb.core.storage.index.ivf;
 
-import static org.vanilladb.core.sql.Type.DOUBLE;
 import static org.vanilladb.core.sql.Type.BIGINT;
 import static org.vanilladb.core.sql.Type.INTEGER;
-import static org.vanilladb.core.sql.Type.VECTOR;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,16 +27,17 @@ import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.sql.distfn.DistanceFn;
 import org.vanilladb.core.sql.distfn.EuclideanFn;
 import org.vanilladb.core.util.CoreProperties;
-import org.vanilladb.core.storage.index.ivf.DataRecord;
 
 public class IVFIndex extends Index {
 
     private static final String SCHEMA_ID = "i_id", SCHEMA_CID = "c_id", SCHEMA_VECTOR = "i_emb",
             SCHEMA_RID_BLOCK = "block", SCHEMA_RID_ID = "id";
     private static final int NUM_CLUSTERS;
+    public static List<DataRecord> data;
 
     static {
         NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
+        data = new ArrayList<>();
     }
     public int getNumClusters(){
         return NUM_CLUSTERS;
@@ -284,8 +283,13 @@ public class IVFIndex extends Index {
 
     @Override
     public void insert(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
-        if (!tableSet)
+        if (!tableSet){
+            DataRecord d = new DataRecord(key.get(0), 
+                new BigIntConstant(dataRecordId.block().number()), 
+                new IntegerConstant(dataRecordId.id()));
+            IVFIndex.data.add(d);
             return;
+        }
         // search the position
         beforeFirst(new SearchRange(key));
 
