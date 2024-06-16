@@ -28,7 +28,7 @@ public class KMeans {
         List<List<DataRecord>> clusters = null;
 
         for (int iteration = 0; iteration < maxIterations; iteration++) {
-            System.out.println("Iteration: " + iteration);
+            // System.out.println("Iteration: " + iteration);
             clusters = assignClusters(data, centroids);
             List<VectorConstant> newCentroids = computeNewCentroids(clusters);
 

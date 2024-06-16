@@ -273,7 +273,7 @@ public class IVFIndex extends Index {
         RecordFile.formatFileHeader(ti.fileName(), tx);
         for (int i = 0; i < centroids.size(); i++) {
             if (cluster.get(i).size() <= 10) {
-                System.out.println("Cluster_center_" + i + " is empty");
+                // System.out.println("Cluster_center_" + i + " is empty");
                 continue;
             }
             VectorConstant vector = (VectorConstant) centroids.get(i).i_emb;
@@ -288,7 +288,7 @@ public class IVFIndex extends Index {
             return;
         for (int i = 0; i < cluster.size(); i++) {
             if (cluster.get(i).size() <= 10) {
-                System.out.println("Cluster" + filenamePosfix + "_" + i + " is empty");
+                // System.out.println("Cluster" + filenamePosfix + "_" + i + " is empty");
                 continue;
             }
             String tblname = clusterTblnamePrefix + filenamePosfix + "_" + i;
