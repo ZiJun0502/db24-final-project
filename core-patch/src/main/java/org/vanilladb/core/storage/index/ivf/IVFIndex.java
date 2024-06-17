@@ -39,7 +39,7 @@ public class IVFIndex extends Index {
     public static List<DataRecord> data;
 
     static {
-        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 200);
+        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_CLUSTERS", 800);
         NUM_SEARCH = CoreProperties.getLoader().getPropertyAsInteger(IVFIndex.class.getName() + ".NUM_SEARCH", 2);
         data = new ArrayList<>();
     }
